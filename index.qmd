@@ -32,7 +32,7 @@ if(!require("leaflet")){}
 
 
 baruch_longitude <- -73.98333
-baruch_latitude  <- +40.75028
+baruch_latitude  <- +40.74028
 
 leaflet() |>
   addTiles() |>
