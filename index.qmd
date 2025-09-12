@@ -1,18 +1,35 @@
 ---
-title: "Madison Brinson's Website"
+title: "Madison Brinson's Website"          
 ---
-I'm Madison Brinson, a graduate student at Baruch College's Zicklin School of Business. My current program of study is Quantitative Methods and Modeling. 
+
+
+I'm Madison Brinson, a graduate student at Baruch College's Zicklin School of Business. 
+My current program of study is Quantitative Methods and Modeling. I recently moved to NYC from out of state. I'm excited to explore opportunities and learn all I can for my future career!
+
+
+::: {style="position:absolute; top:0.7in; left:10.5in;"}
+![](cat mug.png){width=15%}
+:::
+
+
+
+
+
+
+
+
+
 
 ```{r}
 #| echo: false
 #| message: false
 #| warning: false
 
-if(!require("leaflet")){
+if(!require("leaflet")){}
     options(repos=c(CRAN="https://cloud.r-project.org"))
     install.packages("leaflet")
     stopifnot(require("leaflet"))
-}
+
 
 baruch_longitude <- -73.98333
 baruch_latitude  <- +40.75028
