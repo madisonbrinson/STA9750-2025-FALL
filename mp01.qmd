@@ -1,0 +1,480 @@
+---
+title: "Mini Project 01"
+format:
+  html:
+    code-fold: true  
+    code-tools: true 
+---
+# Introduction
+As a data analyst for Netflix, I have prepared a detailed analysis of data on TV shows, Films, viewership, and geographical influences on media. While analyzing the data I have found that Stranger Things dominated the US market, Hindi films chart very highly in India, and One Piece will likely continue to be a global phenomenon in all forms of it's release. 
+
+# Task 1: Aquring Data
+
+```{r}
+if(!dir.exists(file.path("data", "mp01"))){
+    dir.create(file.path("data", "mp01"), showWarnings=FALSE, recursive=TRUE)
+}
+
+GLOBAL_TOP_10_FILENAME <- file.path("data", "mp01", "global_top10_alltime.csv")
+
+if(!file.exists(GLOBAL_TOP_10_FILENAME)){
+    download.file("https://www.netflix.com/tudum/top10/data/all-weeks-global.tsv", 
+                  destfile=GLOBAL_TOP_10_FILENAME)
+}
+
+COUNTRY_TOP_10_FILENAME <- file.path("data", "mp01", "country_top10_alltime.csv")
+
+if(!file.exists(COUNTRY_TOP_10_FILENAME)){   
+    download.file("https://www.netflix.com/tudum/top10/data/all-weeks-countries.tsv", 
+                  destfile=COUNTRY_TOP_10_FILENAME)
+}
+```
+
+# Data Import and Preperation
+```{r}
+if(!require("tidyverse")) install.packages("tidyverse")
+library(readr)
+library(dplyr)
+
+GLOBAL_TOP_10 <- read_tsv(GLOBAL_TOP_10_FILENAME) 
+```
+
+```{r}
+str(GLOBAL_TOP_10)
+```
+
+```{r, results= "show"}
+glimpse(GLOBAL_TOP_10)
+```
+
+```{r}
+GLOBAL_TOP_10 <- GLOBAL_TOP_10 |>
+    mutate(season_title = if_else(season_title == "N/A", NA_character_, season_title))
+glimpse(GLOBAL_TOP_10)
+```
+
+```{r}
+COUNTRY_TOP_10 <- read_tsv(COUNTRY_TOP_10_FILENAME, na = "N/A")
+glimpse(COUNTRY_TOP_10)
+str(COUNTRY_TOP_10)
+```
+
+# Exploratory Data Analysis
+```{r, results= "show"}
+library(DT)
+GLOBAL_TOP_10 |> 
+    head(n=20) |>
+    datatable(options=list(searching=FALSE, info=FALSE))
+```
+
+```{r, results= "show"}
+library(stringr)
+format_titles <- function(df){
+    colnames(df) <- str_replace_all(colnames(df), "_", " ") |> str_to_title()
+    df
+}
+
+GLOBAL_TOP_10 |> 
+    format_titles() |>
+    head(n=20) |>
+    datatable(options=list(searching=FALSE, info=FALSE)) |>
+    formatRound(c('Weekly Hours Viewed', 'Weekly Views'))
+```
+
+```{r, results= "show"}
+GLOBAL_TOP_10 |> 
+    select(-season_title) |>
+    format_titles() |>
+    head(n=20) |>
+    datatable(options=list(searching=FALSE, info=FALSE)) |>
+    formatRound(c('Weekly Hours Viewed', 'Weekly Views'))
+```
+
+```{r, results= "show"}
+GLOBAL_TOP_10 |> 
+    mutate(`runtime_(minutes)` = round(60 * runtime)) |>
+    select(-season_title, 
+           -runtime) |>
+    format_titles() |>
+    head(n=20) |>
+    datatable(options=list(searching=FALSE, info=FALSE)) |>
+    formatRound(c('Weekly Hours Viewed', 'Weekly Views'))
+```
+
+# Task 4: Exploratory Data Analysis
+## Question 1. How many different countries does Netflix operate in? 
+```{r, results= "show"}
+n_countries <- COUNTRY_TOP_10 |>
+  summarize(n = n_distinct(country_name, na.rm = TRUE)) |>
+  pull(n)
+n_countries
+```
+Netflix operates in 94 different countries according to our data.
+
+## Question 2. Which non-English-language film has spent the most cumulative weeks in the global top 10? How many weeks did it spend?
+```{r, results= "show"}
+library(dplyr)
+library(DT)
+
+result <- GLOBAL_TOP_10 %>%
+  filter((category) == "Films (Non-English)") %>%
+  group_by(show_title) %>%
+  summarize(weeks = n_distinct(week), .groups = "drop") %>%
+  arrange(desc(weeks), show_title) %>%
+  slice_head(n = 1)
+
+DT::datatable(
+  result %>% rename("Show Title" = show_title, Weeks = weeks),
+  rownames = TRUE)
+```
+Out of the non-English films, the German film "All Quiet on the Western Front", has spent the most cumulative weeks in the the global top 10, with 23 cumulative weeks.
+
+## QUestion 3. What is the longest film (English or non-English) to have ever appeared in the Netflix global Top 10? How long is it in minutes?
+
+```{r, results= "show"}
+library(dplyr)
+
+result <- GLOBAL_TOP_10 %>%
+  filter(category %in% c("Films (English)", "Films (Non-English)"),
+         !is.na(runtime)) %>%
+  group_by(show_title) %>%
+  summarize(minutes = max(round(60 * runtime)), .groups = "drop") %>%
+  arrange(desc(minutes), show_title) %>%
+  slice_head(n = 1)
+
+DT::datatable(
+  result %>% rename("Show Title" = show_title, "Runtime (Minutes)" = minutes),
+  rownames = TRUE
+)
+```
+"Pushpa 2: The Rule (Reloaded Verison)" is the longest film in either categories to have ever appeared in Netflix's Global Top 10. It's runtime is a whopping 224 minutes.
+
+# Question 4. For each of the four categories, what program has the most total hours of global viewership?
+
+```{r, results= "show"}
+library(dplyr)
+
+
+result <- GLOBAL_TOP_10 %>%
+  group_by(category, show_title) %>%
+  summarize(total_hours = sum(weekly_hours_viewed, na.rm = TRUE), .groups = "drop") %>%
+  group_by(category) %>%
+  slice_max(total_hours, n = 1) %>%
+  arrange(desc(total_hours))
+
+DT::datatable(
+  result %>% rename(Category = category, "Show Title" = show_title, "Total Hours" = total_hours),
+  rownames = TRUE
+)
+```
+Squid game has the most hours of viewership for the TV(Non-English) category and also gets the award for most hours of viewership across all four categories. Stranger Things leads the TV(English) category, KPop Demon Hunters leads the Flims(English), and Society of Snow leads the Non-English Films category.
+
+## Question 5.Which TV show had the longest run in a country’s Top 10? How long was this run and in what country did it occur?
+
+```{r, results= "show"}
+result <- COUNTRY_TOP_10 %>%
+  filter(category == "TV") %>%
+  group_by(show_title, country_name) %>%
+  summarize(weeks = max(cumulative_weeks_in_top_10, na.rm = TRUE), .groups = "drop") %>%
+  arrange(desc(weeks), show_title, country_name) %>%
+  slice_head(n = 1)
+
+DT::datatable(
+  result %>% rename("Show Title" = show_title, Country = country_name, "Cumulative Weeks" = weeks),
+  rownames = TRUE
+)
+```
+
+Money Heist had the longest run in terms of cumulative weeks In Pakistan at 127 weeks.
+
+## Question 6. Netflix provides over 200 weeks of service history for all but one country in our data set. Which country is this and when did Netflix cease operations in that country?
+
+```{r, results= "show"}
+library(dplyr); library(DT)
+
+result <- COUNTRY_TOP_10 %>%
+  group_by(country_name) %>%
+  summarize(weeks_history = n_distinct(week),
+            ceased = max(week), .groups = "drop") %>%
+  filter(weeks_history <= 200) %>%
+  arrange(weeks_history, country_name) %>%
+  slice_head(n = 1)
+
+DT::datatable(
+  result %>% dplyr::rename(
+    Country = country_name,
+    `Weeks of History` = weeks_history,
+    `Service End Week` = ceased
+  ),
+  rownames = TRUE
+)
+
+  
+```
+Russia is the only country to have less than 200 hours of service.
+
+## Question 7. What is the total viewership of the TV show Squid Game? Note that there are three seasons total and we are looking for the total number of hours watched across all seasons.
+```{r, results= "show"}
+
+result <- GLOBAL_TOP_10 %>%
+  filter(show_title == "Squid Game") %>%
+  group_by(show_title) %>%
+  summarize(total_hours_watched = sum(weekly_hours_viewed, na.rm = TRUE), .groups = "drop")
+
+DT::datatable(
+  result %>% rename(`Show Title` = show_title,
+                           `Total Hours Watched` = total_hours_watched),
+  rownames = TRUE
+)
+```
+
+The total viewership of "Squid Game" is 5,048,300,000 hours.
+
+## Question 8. The movie Red Notice has a runtime of 1 hour and 58 minutes. Approximately how many views did it receive in 2021? Note that Netflix does not provide the weekly_views values that far back in the past, but you can compute it yourself using the total view time and the runtime.
+
+```{r, results= "show"}
+library(dplyr)
+library(lubridate)
+library(DT)
+
+result <- GLOBAL_TOP_10 %>%
+  filter(category %in% c("Films (English)", "Films (Non-English)"),
+         show_title == "Red Notice",
+         year(week) == 2021) %>%
+  group_by(show_title) %>%
+  summarize(approx_views = round(sum(weekly_hours_viewed, na.rm = TRUE) / (118/60)),
+            .groups = "drop")
+
+DT::datatable(
+  result %>% rename(`Show Title` = show_title, `Approx Views (2021)` = approx_views),
+  rownames = TRUE
+)
+
+```
+Red Notice received approximately 201732203 veiws.
+
+## Question 9. How many Films reached Number 1 in the US but did not originally debut there? That is, find films that first appeared on the Top 10 chart at, e.g., Number 4 but then became more popular and eventually hit Number 1? What is the most recent film to pull this off?
+
+
+```{r, results= "show"}
+n_titles <- COUNTRY_TOP_10 %>%
+  filter(country_name == "United States", category == "Films") %>%
+  group_by(show_title) %>%
+  summarize(
+    debut_week = min(week),
+    debut_rank = weekly_rank[which.min(week)],
+    hit1 = any(weekly_rank == 1),
+    .groups = "drop"
+  ) %>%
+  filter(hit1, debut_rank > 1) %>%
+  tally() %>%
+  pull(n)
+
+n_titles
+```
+
+```{r, results= "show"}
+result <- COUNTRY_TOP_10 %>%
+  filter(country_name == "United States", category == "Films") %>%
+  group_by(show_title) %>%
+  summarize(
+    debut_week = min(week),
+    debut_rank = weekly_rank[which.min(week)],
+    first_week_at_1 = if (any(weekly_rank == 1)) min(week[weekly_rank == 1]) else as.Date(NA),
+    .groups = "drop"
+  ) %>%
+  filter(debut_rank > 1, !is.na(first_week_at_1)) %>%
+  arrange(desc(first_week_at_1)) %>%
+  slice_head(n = 1)
+
+DT::datatable(
+  result %>% rename(
+    `Show Title` = show_title,
+    `US Debut Week` = debut_week,
+    `US Debut Rank` = debut_rank,
+    `First Week at #1` = first_week_at_1
+  ),
+  rownames = TRUE
+)
+```
+
+There were 45 films that reached number 1 even after not debuting at number 1. The film Unknown Number: The High School Catfish was the most recent film to pull this off.
+
+# Question 10. Which TV show/season hit the top 10 in the most countries in its debut week? In how many countries did it chart?
+```{r}
+df <- COUNTRY_TOP_10 %>%
+  filter(category == "TV", !is.na(season_title))
+
+result <- df %>%
+  group_by(show_title, season_title) %>%
+  summarize(debut_week = min(week), .groups = "drop") %>%
+  inner_join(df, by = c("show_title", "season_title")) %>%
+  filter(week == debut_week) %>%
+  group_by(show_title, season_title, debut_week) %>%
+  summarize(countries_charted = n_distinct(country_name), .groups = "drop") %>%
+  arrange(desc(countries_charted), show_title, season_title) %>%
+  slice_head(n = 1)
+
+DT::datatable(
+  result %>% rename(
+    `Show Title` = show_title,
+    `Season Title` = season_title,
+    `Debut Week` = debut_week,
+    `Countries Charted` = countries_charted
+  ),
+  rownames = TRUE
+)
+```
+
+Emily in Paris hit the top 10 in the most countries, 94, during its debut week.
+
+# Press Releases
+## Press Release 1: Stranger Things Have Happened
+Stranger Things has been a global phenomenon for years. I have a very special appreciation for this show because the location of the Creel House is in my hometown. The show has become increasingly popular in recent years, with viewership growing over its 4 seasons. In anticipation of the upcoming season 5, let's look at some of the ways this show tops the charts. 
+
+```{r}
+result <- GLOBAL_TOP_10 %>%
+  filter(show_title == "Stranger Things") %>%
+  group_by(show_title) %>%
+  summarize(total_hours_watched = sum(weekly_hours_viewed, na.rm = TRUE), .groups = "drop")
+print(result)
+```
+
+
+```{r}
+weeks_in_top_10 <- GLOBAL_TOP_10 %>%
+  filter(show_title == "Stranger Things") %>%
+  group_by(show_title) %>%
+  summarize(weeks = max(cumulative_weeks_in_top_10, na.rm = TRUE), .groups = "drop")
+
+weeks_in_top_10
+
+```
+Stranger Things had 2967980000 hours of total viewership and spent 45 weeks in the top 10. Viewership increased from season 3 to season 4 significantly. The show will surely continue to dominate the charts with its history of success. 
+
+```{r}
+st_season_hours <- GLOBAL_TOP_10 %>%
+  filter(startsWith(category, "TV"),
+         show_title == "Stranger Things",
+         !is.na(season_title)) %>%
+  mutate(season_num = as.integer(gsub("\\D+", "", season_title))) %>%  # extract 1..4
+  group_by(season_num) %>%
+  summarize(total_hours = sum(weekly_hours_viewed, na.rm = TRUE), .groups = "drop")
+
+result <- tibble::tibble(season_num = 1:4) %>%
+  left_join(st_season_hours, by = "season_num") %>%
+  mutate(total_hours = dplyr::coalesce(total_hours, 0),
+         season = factor(paste("Season", season_num), levels = paste("Season", 1:4)))
+
+ggplot(result, aes(x = season, y = total_hours)) +
+  geom_col(fill = "purple") +
+  labs(title = "Stranger Things — Total Hours by Season",
+       x = NULL, y = "Total hours viewed") +
+  scale_y_continuous(labels = function(x) format(x, big.mark = ",", scientific = FALSE)) +
+  theme_minimal()
+  
+```
+
+## Press Release 2 : Opportunities in India
+The growth opportunity for Hindi Films in India is immense. Being one of the world's largest countries and economies, consumption of media in India will likely only continue to grow. Netflix has an opportunity to dominate the media consumption market if the company focuses on the production and streaming of Hindi films targeting the audience in India. 
+
+```{r}
+result <- COUNTRY_TOP_10 %>%
+  filter(country_name == "India", category == "Films") %>%
+  filter(str_detect(coalesce(show_title, ""), regex("hindi", ignore_case = TRUE)) |
+         str_detect(coalesce(season_title, ""), regex("hindi", ignore_case = TRUE))) %>%
+  group_by(show_title) %>%
+  summarize(weeks_in_india = max(cumulative_weeks_in_top_10, na.rm = TRUE),
+            best_rank_india = min(weekly_rank, na.rm = TRUE),
+            .groups = "drop") %>%
+  arrange(best_rank_india, desc(weeks_in_india))
+
+DT::datatable(
+  result %>% rename(`Show Title` = show_title,
+                           `Weeks (India)` = weeks_in_india,
+                           `Best Rank (India)` = best_rank_india),
+  rownames = TRUE
+)
+```
+From this table, we can see that over half of the Hindi films hit rank 1 or 2. While only 1 Hindi film did exceptionally well among this audience in terms of the length of time at number 1 or 2, the fact that still over half of the films ranked this highly tells us that the audience is interested in these types of films. 
+
+```{r}
+hindi_titles <- COUNTRY_TOP_10 %>%
+  filter(country_name == "India", category == "Films") %>%
+  filter(str_detect(coalesce(show_title, ""), regex("hindi", ignore_case = TRUE)) |
+         str_detect(coalesce(season_title, ""), regex("hindi", ignore_case = TRUE))) %>%
+  distinct(show_title)
+
+shares <- COUNTRY_TOP_10 %>%
+  filter(category == "Films", show_title %in% hindi_titles$show_title) %>%
+  select(country_name, week, show_title, weekly_rank) %>%
+  mutate(w = pmax(0, 11 - weekly_rank)) %>%             # 10..1 weights
+  group_by(week, show_title) %>%
+  mutate(total_w = sum(w, na.rm = TRUE),
+         share   = if_else(total_w > 0, w / total_w, NA_real_)) %>%
+  ungroup()
+
+result <- shares %>%
+  inner_join(
+    GLOBAL_TOP_10 %>%
+      filter(grepl("^Films", category)) %>%
+      select(week, show_title, weekly_hours_viewed),
+    by = c("week", "show_title")
+  ) %>%
+  filter(country_name == "India") %>%
+  group_by(week) %>%
+  summarize(estimated_hours = sum(share * weekly_hours_viewed, na.rm = TRUE),
+            .groups = "drop") %>%
+  filter(week >= (max(week, na.rm = TRUE) %m-% years(2))) %>%
+  arrange(week)
+
+ggplot(result, aes(x = week, y = estimated_hours)) +
+  geom_col(fill = "purple") +
+  labs(title = "Hindi-flagged Films: Estimated Weekly Viewership in India (Last 2 Years)",
+       x = NULL, y = "Estimated hours viewed") +
+  scale_y_continuous(labels = function(x) format(x, big.mark = ",", scientific = FALSE)) +
+  theme_minimal()
+```
+
+The viewership of Hindi Films in India spiked in 2023, likely with the release or the increase in popularity of a film, but remains strong indicating that there is a strong consumer base for Netflix should it decide to foucus more on Hindi films with the audience of India in mind.
+
+
+## Press Release 3: The One Piece is Real
+
+One Piece is one of the world's most treasured manga and anime series. Achieving global popularity, it has reached millions with its captivating story, twists and turns, and ever-present question of "What is the One Piece?" Based on the success of the manga and anime, Netflix has created its own version of the story - the live action adaptation. Creating a live action adaptation allows audiences that weren't previously interested in manga or anime to have a more familiar introduction to One Piece. It also gives existing fans a chance to see their favorite story come to life.
+
+```{r}
+result <- GLOBAL_TOP_10 %>%
+  filter(startsWith(category, "TV"),
+         tolower(show_title) == "one piece") %>%
+  summarize(total_hours = sum(weekly_hours_viewed, na.rm = TRUE), .groups = "drop") %>%
+  mutate(show_title = "One Piece")
+
+DT::datatable(
+  result %>% rename(`Show Title` = show_title, `Total Hours` = total_hours),
+  rownames = TRUE
+)
+```
+
+The show did well, as expected with 480,300,000 hours of viewership. However, for some parts of the audience, this may have been their first glimpse of the series, so viewership would be expected to rise with additional seasons of the show. As newer audiences get more familiar with the series itself, they would likely come back to watch the show with a better understanding of the source material, as well.
+```{r}
+
+result <- COUNTRY_TOP_10 %>%
+  filter(category == "TV",
+         tolower(show_title) == "one piece",
+         country_name %in% c("United States","Japan")) %>%
+  group_by(country_name) %>%
+  summarize(best_rank = min(weekly_rank, na.rm = TRUE),
+            weeks_in_top10 = max(cumulative_weeks_in_top_10, na.rm = TRUE),
+            .groups = "drop") %>%
+  arrange(best_rank)
+
+DT::datatable(
+  result %>% rename(Country = country_name,
+                           `Best Rank` = best_rank,
+                           `Weeks in Top 10` = weeks_in_top10),
+  rownames = TRUE
+)
+```
+
+Since the series is written and first gained popularity in Japan, the show ranked better there compared to the US. However, as One Piece is already a global phenomenon, we can expect that with the release of subsequent seasons and more time to reach new audiences, the show will likely increase in popularity. 
