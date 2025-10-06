@@ -6,7 +6,7 @@ format:
     code-tools: true 
 ---
 # Introduction
-As a data analyst for Netflix, I have prepared a detailed analysis of data on TV shows, Films, viewership, and geographical influences on media. While analyzing the data I have found that Stranger Things dominated the US market, Hindi films chart very highly in India, and One Piece will likely continue to be a global phenomenon in all forms of it's release. 
+As a data analyst for Netflix, I have prepared a detailed analysis of data on TV shows, Films, viewership, and geographical influences on media. While analyzing the data I have found that Stranger Things dominated the US market, Hindi films chart very highly in India, and One Piece will likely continue to be a global phenomenon in all forms of its release. 
 
 # Task 1: Aquring Data
 
@@ -211,7 +211,7 @@ DT::datatable(
 
   
 ```
-Russia is the only country to have less than 200 hours of service.
+Russia is the only country to have less than 200 weeks of Netflix service. This service ended on Febuary 27th, 2022.
 
 ## Question 7. What is the total viewership of the TV show Squid Game? Note that there are three seasons total and we are looking for the total number of hours watched across all seasons.
 ```{r, results= "show"}
@@ -228,7 +228,7 @@ DT::datatable(
 )
 ```
 
-The total viewership of "Squid Game" is 5,048,300,000 hours.
+The total viewership of Squid Game is 5,048,300,000 hours.
 
 ## Question 8. The movie Red Notice has a runtime of 1 hour and 58 minutes. Approximately how many views did it receive in 2021? Note that Netflix does not provide the weekly_views values that far back in the past, but you can compute it yourself using the total view time and the runtime.
 
@@ -251,7 +251,7 @@ DT::datatable(
 )
 
 ```
-Red Notice received approximately 201732203 veiws.
+Red Notice received approximately 201,732,203 views.
 
 ## Question 9. How many Films reached Number 1 in the US but did not originally debut there? That is, find films that first appeared on the Top 10 chart at, e.g., Number 4 but then became more popular and eventually hit Number 1? What is the most recent film to pull this off?
 
@@ -330,14 +330,23 @@ Emily in Paris hit the top 10 in the most countries, 94, during its debut week.
 
 # Press Releases
 ## Press Release 1: Stranger Things Have Happened
+
 Stranger Things has been a global phenomenon for years. I have a very special appreciation for this show because the location of the Creel House is in my hometown. The show has become increasingly popular in recent years, with viewership growing over its 4 seasons. In anticipation of the upcoming season 5, let's look at some of the ways this show tops the charts. 
 
 ```{r}
+library (dplyr)
+library (DT)
+
 result <- GLOBAL_TOP_10 %>%
   filter(show_title == "Stranger Things") %>%
   group_by(show_title) %>%
   summarize(total_hours_watched = sum(weekly_hours_viewed, na.rm = TRUE), .groups = "drop")
-print(result)
+
+DT::datatable(
+  result %>% rename(`Show Title` = show_title,
+                           `Total Hours Watched` = total_hours_watched),
+  rownames = TRUE
+)
 ```
 
 
@@ -347,10 +356,16 @@ weeks_in_top_10 <- GLOBAL_TOP_10 %>%
   group_by(show_title) %>%
   summarize(weeks = max(cumulative_weeks_in_top_10, na.rm = TRUE), .groups = "drop")
 
-weeks_in_top_10
+DT::datatable(
+  weeks_in_top_10 %>%
+    rename(`Show Title` = show_title, `Weeks in Global Top 10` = weeks),
+  rownames = TRUE
+)
 
 ```
-Stranger Things had 2967980000 hours of total viewership and spent 45 weeks in the top 10. Viewership increased from season 3 to season 4 significantly. The show will surely continue to dominate the charts with its history of success. 
+Stranger Things had 2,967,980,000 hours of total viewership and spent 45 weeks in the top 10. Viewership increased from season 3 to season 4 significantly. The show will surely continue to dominate the charts with its history of success. 
+
+
 
 ```{r}
 st_season_hours <- GLOBAL_TOP_10 %>%
@@ -436,7 +451,7 @@ ggplot(result, aes(x = week, y = estimated_hours)) +
   theme_minimal()
 ```
 
-The viewership of Hindi Films in India spiked in 2023, likely with the release or the increase in popularity of a film, but remains strong indicating that there is a strong consumer base for Netflix should it decide to foucus more on Hindi films with the audience of India in mind.
+The viewership of Hindi Films in India spiked in 2023, likely with the release or the increase in popularity of a film, but remains strong indicating that there is a strong consumer base for Netflix should it decide to focus more on Hindi films with the audience of India in mind.
 
 
 ## Press Release 3: The One Piece is Real
