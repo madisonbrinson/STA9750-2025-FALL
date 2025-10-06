@@ -10,10 +10,15 @@ website:
   navbar:
     background: primary
     search: false
-    
+    left:
+      - href: index.qmd
+        text: Homepage
+      - href: mp01.qmd
+        text: Mini Project 01
 format:
   html:
-    theme: vapor
+    page-layout: full
+    theme: pulse
     toc: false
 
 editor:
