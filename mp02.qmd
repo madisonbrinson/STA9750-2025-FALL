@@ -2,9 +2,18 @@
 title: Mini Project 2
 format:
   html:
+    toc: true
+    toc-location: right
+    toc-depth: 3 
     code-fold: true  
     code-tools: true 
+    
+    
 ---
+# Introduction
+
+We are examining the relationship between housing growth and rent burden. Throughout this analysis we will look at the effect of income on  rent cost, income by state and industry, the effects of COVID 19 on employment in the healthcare industry, and population growth. In this analysis we will conduct a search for YIMBYs, or Yes In My Backyard citites. These cities allow for housing growth, account for population growth, and have lowered rent cost over our study period.
+
 # Data Aquisition
 
 ```{r}
@@ -357,7 +366,7 @@ datatable(
  
 ```
 
-Houston TX permitted the largest number of new housing units from 2010 to 2019 with 482,075 new units permitted.
+**Houston, TX** permitted the largest number of new housing units from 2010 to 2019 with **482,075** new units permitted.
 
 ## In what year did Albuquerque, NM (CBSA Number 10740) permit the most new housing units?
 ```{r}
@@ -392,8 +401,8 @@ albuquerque_permits <- PERMITS |>
 )
 
 ```
-\
-ALbuquerque NM permitted the most new units in 2021.
+
+ALbuquerque, NM permitted the most new units in **2021**.
 
 ## Which state (not CBSA) had the highest average individual income in 2015? 
 ```{r}
@@ -456,7 +465,7 @@ formatRound(
   
 ```
 
-Washington DC had the highest individual income by state at $33,233.
+Washington DC had the highest individual income by state in 2015 at **$33,233**.
 
 ## Data scientists and business analysts are recorded under NAICS code 5182. What is the last year in which the NYC CBSA had the most data scientists in the country? In recent, the San Francisco CBSA has had the most data scientists.
 ```{r}
@@ -504,7 +513,7 @@ datatable(
 
 ```
 
-Nyc had the most data scientists in 2015 with 18,922 data scientists.
+Nyc had the most data scientists in **2015** with **18,922** data scientists.
 
 ## What fraction of total wages in the NYC CBSA was earned by people employed in the finance and insurance industries (NAICS code 52)? In what year did this fraction peak?
 ```{r}
@@ -551,7 +560,7 @@ result
 
 ```
 
-4.6% of total wages in the NYC CBSA was earned by people in the finance and insurance industry at its peak in 2014.
+**4.6%** of total wages in the NYC CBSA was earned by people in the finance and insurance industry at its peak in **2014**.
 
 # Task 3
 
@@ -579,6 +588,7 @@ ggplot(cbsa_2009, aes(x = household_income, y = monthly_rent)) +
   theme_minimal()
 ```
 
+The data for **monthly rent** and **average household** income seem to have a positive correlation. This positive correlation makes sense because with more income, families are able to afford a higher rent cost, and provide a better quality of life. This correlation could also be attributed to inflation of rent price based on the increase in household income.
 
 ## The relationship between total employment and total employment in the health care and social services sector (NAICS 62) across different CBSAs. Design your visualization so that it is possible to see the evolution of this relationship over time.
 ```{r}
@@ -615,6 +625,7 @@ ggplot(emp_df, aes(x = total_emp / 1e6, y = health_emp / 1e6, color = factor(cbs
 
 ```
 
+We can see from these plots that as total employment increases, employment within the healthcare sector increases steadily as well, which is intuitive. But we can infer from this data that total employment also increases as the population increases, because the population has increased since 2013. If more people exist, more people will become employed and be employed in the healthcare sector. However, if we take a look at the graphs from 2019 and 2021, we can see that after the pandemic in 2020 the total employment in 2021 actually goes down significantly, while healthcare employment remains relatively the same. This highlights the need for healthcare workers after a global health crisis.
 
 ## The evolution of average household size over time. Use different lines to represent different CBSAs.
 ```{r}
@@ -665,6 +676,7 @@ ggplot(hh_pop, aes(x = year, y = avg_household_size, group = GEOID)) +
     legend.position = "none"
   )
 ```
+Overall, and for out two highlighted CBSAs, it seems that housing size has decreased.
 
 # Task 5 Housing Growth
 
@@ -746,6 +758,7 @@ result
 
 
 ```
+Our **rent burden** for Atlanta has increased significantly, especially from 2022 to 2023.  
 
 ## Top 5 and Bottom 5 
 ```{r}
@@ -1080,7 +1093,7 @@ result
 
 ```
 
-The table provides a list of locations performing well in terms of housing growth and decreasing rent burden.
+The table provides a list of locations performing well in terms of housing growth and decreasing rent burden.YIMBYs are defined by CBSAs with population growth, rent decrease, housing growth, and high initial rent burden.
 
 ## Bubble plot of possible YIMBYS
 ```{r}
@@ -1242,23 +1255,47 @@ palette_pp <- setNames(c("#7B2CBF","#9D4EDD","#C77DFF","#F72585","#FF4D6D","grey
 ggplot(plot_data, aes(year, RENT_BURDEN, color = color_group, group = GEOID)) +
   geom_line(linewidth = 1) +
   gghighlight(highlight_flag, use_direct_label = FALSE,
+              use_group_by = FALSE,
               unhighlighted_params = list(colour = "grey75", alpha = 0.6)) +
   scale_color_manual(values = palette_pp, name = "CBSA") +
   labs(title = "YIMBY Top 5", x = "Year", y = "Rent Burden") +
   theme_minimal(base_size = 12) +
-  theme(legend.position = "bottom")
-
+  theme(
+    legend.position = "bottom",
+    legend.box = "horizontal",
+    legend.text = element_text(size = 7),
+    legend.key.width  = unit(10, "pt"),
+    legend.key.height = unit(10, "pt"),
+    legend.margin = margin(t = 4, r = 8, b = 4, l = 8),
+    legend.box.margin = margin(t = 6, b = 12),
+    plot.margin = margin(t = 10, r = 10, b = 30, l = 10)  # extra bottom room
+  ) +
+  guides(color = guide_legend(ncol = 4, byrow = TRUE)) 
 ```
 
 The plot shows the decrease in rent for our top 5 YIMBYs since 2014. Our top 5 YIMBY candidates do behave like YIMBYS as we defined earlier in terms of rent decrease over our period of time since 2014.
 
-## Task 7 Policy Breif
+# Task 7 Policy Breif
 
-Across the country, especially in highly populated areas like NYC, rental costs are sky high. The rental market today is extremely competitive, driving prices higher. This limits families across the nation from affordable, high quality homes. While rental prices have climbed in NIMBY cities like NYC, increases in individual rent have not been sufficient to cover these costs. Students, or recent graduates, are particularly burdened when it comes to high rental costs. 
+### **Introduction**
 
-We will have one respresentative from our YIMBY city Yuma Arizona, and one representative from NYC as sponsors for this bill. 
+Across the country, especially in highly populated areas like NYC, rental costs are sky high. The rental market today is extremely competitive, driving prices higher. This limits families across the nation from affordable, high quality homes. While rental prices have climbed in NIMBY cities like NYC, increases in individual income have not been sufficient to cover these costs. Students, or recent graduates, are particularly burdened when it comes to high rental costs. Our study looked at cities starting in 2014 and determined which cities are considered YIMBYs and which cities are considered NIMBYs.
 
-NYC is a major hub for the arts, education, and city jobs. Modeling NYC's policies to rival one of a NIMBY city may be difficult purely because of the geography of Manhattan, however these policies would benefit local artists, students, and city workers such as MTA employees. Giving these groups access to more affordable, nice housing would allow them to flourish and, in turn, give them a suitable foundation to boost the economy. MTA workers would especially benefit and, since NYC relies on MTA workers to keep the city functioning, this benefit would lead to the running optimally. 
+### **Sponsors**
 
+We will have one representative from our YIMBY city Burlington, North Carolina, and one representative from NYC as sponsors for this bill. 
+
+### **Potential Benefits from our Policy**
+
+NYC is a major hub for the arts, education, and city jobs. Modeling NYC's policies to rival one of a NIMBY city may be difficult purely because of the geography of Manhattan, however these policies would benefit local artists, students, and city workers such as MTA employees. Giving these groups access to more affordable, nice housing would allow them to flourish and, in turn, give them a suitable foundation to boost the economy. MTA workers would especially benefit and, since NYC relies on MTA workers to keep the city functioning, this benefit would lead to the running optimally. The resident of Burlington, North Carolina also have countless city jobs and many residents rely on these city jobs for income. Burlington, North Carolina is located near several universities - conveniently located approximately 30 minutes from Duke - so students and recent graduates would also benefit for more available housing and a lower rent cost. NYC is home to many colleges and universities, so students in NYC would benefit from these policies as well. 
+
+### **Metrics**
+
+For this policy we have identified what makes a city worthy of YIMBY status: decreasing rent burden, positive housing growth rate, high population growth, and high initial rent. Our policy is based on these factors.
+A NIMBY city would be one that has little housing growth and high rent cost.
+
+### **Conclusion** 
+
+While Burlington, NC is considered a WIMBY city, NYC has a long way to go in terms of affordable housing and housing growth. Considering that the population of NYC is growing, the city needs to act soon in order to keep up with housing demand.
 
 
