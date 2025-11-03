@@ -5,7 +5,7 @@ format:
     code-fold: true  
     code-tools: true 
 ---
-## Downloading the data
+# Data Aquisition
 
 ```{r}
 if(!dir.exists(file.path("data", "mp02"))){
@@ -311,8 +311,12 @@ WAGES <- get_bls_qcew_annual_averages()
 
 ```
 
+# Entity Relationship Diagram
 
-# Task 1
+![](ERD.png) 
+
+
+# Task 1 
 
 ## Which CBSA (by name) permitted the largest number of new housing units in the decade from 2010 to 2019 (inclusive)?
 ```{r}
@@ -662,14 +666,18 @@ ggplot(hh_pop, aes(x = year, y = avg_household_size, group = GEOID)) +
   )
 ```
 
-##Task 5
+# Task 5 Housing Growth
+
+## Finding our Baseline for Rent Burden
+
 ```{r}
 
+library(dplyr)
+library(DT)
+
 RENT_BURDEN <- INCOME |>
-  inner_join(RENT, by = c("GEOID", "year", "NAME")) |>
-  mutate(
-    RENT_BURDEN = (monthly_rent * 12) / household_income
-  ) |>
+  inner_join(RENT, by = c("GEOID","year","NAME")) |>
+  mutate(RENT_BURDEN = (monthly_rent * 12) / household_income) |>
   filter(!is.na(RENT_BURDEN))
 
 baseline <- RENT_BURDEN |>
@@ -680,37 +688,66 @@ baseline <- RENT_BURDEN |>
   ) |>
   ungroup()
 
+# compute the summary (no stray prints)
+summary_tbl <- baseline %>%
+  summarise(
+    `Mean Rent Burden` = mean(RENT_BURDEN, na.rm = TRUE),
+    `Mean Index` = mean(RENT_BURDEN_IDX, na.rm = TRUE)
+  )
 
-  baseline |>
-  summarise(mean_rent_burden = mean(RENT_BURDEN, na.rm = TRUE),
-            mean_index = mean(RENT_BURDEN_IDX, na.rm = TRUE))
-  scaled_minmax <- baseline |>
-  group_by(year) |>
-  mutate(
-    min_val = min(RENT_BURDEN, na.rm = TRUE),
-    max_val = max(RENT_BURDEN, na.rm = TRUE),
-    RENT_BURDEN_MINMAX = 100 * (RENT_BURDEN - min_val) / (max_val - min_val)
-  ) |>
-  ungroup()
+result <- datatable(
+  summary_tbl,
+  rownames = FALSE,
+  class = "compact",
+  options = list(dom = 't', paging = FALSE, ordering = FALSE, info = FALSE)
+)
+
+result <- formatPercentage(result, "Mean Rent Burden", 1)
+result <- formatRound(result, "Mean Index", 1)
+result
+
 
 ```
-
+## Rent Burden in Atlanta
 ```{r}
-baseline |>
+library(dplyr)
+library(DT)
+
+tbl <- baseline |>
   group_by(year) |>
   mutate(
     RENT_BURDEN_MINMAX =
       100 * (RENT_BURDEN - min(RENT_BURDEN, na.rm = TRUE)) /
-            (max(RENT_BURDEN, na.rm = TRUE) - min(RENT_BURDEN, na.rm = TRUE))
+      (max(RENT_BURDEN, na.rm = TRUE) - min(RENT_BURDEN, na.rm = TRUE))
   ) |>
   ungroup() |>
   filter(GEOID == 12060) |>
   arrange(year) |>
   select(GEOID, NAME, year, RENT_BURDEN, RENT_BURDEN_IDX, RENT_BURDEN_MINMAX)
 
+result <- datatable(
+  tbl |>
+    rename(
+      `CBSA Code` = GEOID,
+      `CBSA Name` = NAME,
+      Year = year,
+      `Rent Burden` = RENT_BURDEN,
+      `Rent Burden Index (2009=100)` = RENT_BURDEN_IDX,
+      `Rent Burden Min-Max (0-100)` = RENT_BURDEN_MINMAX
+    ),
+  rownames = FALSE,
+  class = "compact",
+  options = list(dom = "t", paging = FALSE, ordering = FALSE, info = FALSE)
+) |>
+  formatPercentage("Rent Burden", 1) |>
+  formatRound(c("Rent Burden Index (2009=100)", "Rent Burden Min-Max (0-100)"), 1)
+
+result
+
 
 ```
 
+## Top 5 and Bottom 5 
 ```{r}
 library(dplyr)
 
@@ -740,6 +777,7 @@ bottom_5 <- extremes |> slice_tail(n = 5)
 
 ```
 
+## Top 5
 ```{r}
 datatable(
   top_5,
@@ -757,6 +795,7 @@ datatable(
 )
 ```
 
+## Bottom 5
 ```{r}
 datatable(
   bottom_5,
@@ -774,6 +813,7 @@ datatable(
 )
 ```
 
+## Population and Housing Growth
 ```{r}
 library(dplyr)
 
@@ -808,9 +848,9 @@ rate_based <- pop_growth_5yr |>
 housing_metrics <- instant |>
   inner_join(rate_based, by = c("GEOID", "NAME", "year"))
 
-housing_metrics
 
-library(dplyr)
+
+
 
 
 housing_metrics_z <- housing_metrics |>
@@ -843,13 +883,69 @@ bottom10_rate <- housing_metrics_z |>
   arrange(RATE_Z) |>
   select(GEOID, NAME, year, RATE_VS_POP_5YR, RATE_Z) |>
   head(10)
-top10_instant
-bottom10_instant
-top10_rate
-bottom10_rate
 
 ```
 
+# Top 10 Instantaneous Housing Growth
+```{r}
+result_top_instant <- datatable(
+  top10_instant,
+  rownames = FALSE,
+  class = "compact",
+  options = list(dom = 't', paging = FALSE, ordering = FALSE, info = FALSE),
+  colnames = c("CBSA Code","CBSA Name","Year","Instant per 1k","Instant Z"),
+  
+)
+result_top_instant <- formatRound(result_top_instant, 4, 1)
+result_top_instant <- formatRound(result_top_instant, 5, 2)
+
+result_top_instant
+```
+
+## Bottom 10 Instantaneous Housing Growth
+```{r}
+
+
+ result_bottom_instant <- datatable(
+  bottom10_instant %>%
+    rename(`CBSA Code` = GEOID, `CBSA Name` = NAME, Year = year,
+           `Instant per 1k` = INSTANT_PER_1K, `Instant Z` = INSTANT_Z),
+  rownames = FALSE, class = "compact",
+  options = list(dom = 't', paging = FALSE, ordering = FALSE, info = FALSE),
+  
+) |> formatRound(4, 1) |> formatRound(5, 2)
+
+result_bottom_instant
+
+```
+
+## Top 10 Housing Growth Rate
+```{r}
+result_top_rate <- datatable(
+  top10_rate %>%
+    rename(`CBSA Code` = GEOID, `CBSA Name` = NAME, Year = year,
+           `Rate of Growth` = RATE_VS_POP_5YR, `Rate Z` = RATE_Z),
+  rownames = FALSE, class = "compact",
+  options = list(dom = 't', paging = FALSE, ordering = FALSE, info = FALSE),
+  
+) |> formatRound(4, 2) |> formatRound(5, 2)
+
+result_top_rate
+```
+
+## Bottom 10 Housing Growth Rate
+```{r}
+result_bottom_rate <- datatable(
+  bottom10_rate %>%
+    rename(`CBSA Code` = GEOID, `CBSA Name` = NAME, Year = year,
+           `Rate of Growth` = RATE_VS_POP_5YR, `Rate Z` = RATE_Z),
+  rownames = FALSE, class = "compact",
+  options = list(dom = 't', paging = FALSE, ordering = FALSE, info = FALSE),
+ 
+) |> formatRound(4, 2) |> formatRound(5, 2)
+result_bottom_rate
+```
+## Top and Bottom Composite Z-score
 ```{r}
 
 top10_composite <- housing_metrics_z |>
@@ -862,14 +958,48 @@ bottom10_composite <- housing_metrics_z |>
   select(GEOID, NAME, year, INSTANT_PER_1K, RATE_VS_POP_5YR, COMPOSITE_Z) |>
   head(10)
 
-top10_composite
-bottom10_composite
+
+
 
 ```
 
 
-##Task 6
+## Top 10 by Composite Z Score
+```{r}
+dt_top_composite <- datatable(
+  top10_composite,
+  rownames = FALSE,
+  class = "compact",
+  options = list(dom = 't', paging = FALSE, ordering = FALSE, info = FALSE),
+  colnames = c("CBSA Code","CBSA Name","Instantaneous","Rate","Composite Z"),
+  
+) |>
+  formatRound(3, 1) |>
+  formatRound(4, 2) |>
+  formatRound(5, 2)
+dt_top_composite
 
+```
+
+## Bottom 10 by Composite z-score
+```{r}
+
+dt_bottom_composite <- datatable(
+  bottom10_composite,
+  rownames = FALSE,
+  class = "compact",
+  options = list(dom = 't', paging = FALSE, ordering = FALSE, info = FALSE),
+  colnames = c("CBSA Code","CBSA Name","Year","Instantaneous","Rate","Composite Z"),
+  
+) |>
+  formatRound(4, 1) |>
+  formatRound(5, 2) |>
+  formatRound(6, 2)
+dt_bottom_composite
+```
+# Task 6 Visualization of Yimbys
+
+## Defining a YIMBY 
 ```{r}
 library(dplyr)
 library(DT)
@@ -950,6 +1080,9 @@ result
 
 ```
 
+The table provides a list of locations performing well in terms of housing growth and decreasing rent burden.
+
+## Bubble plot of possible YIMBYS
 ```{r}
 
 library(dplyr)
@@ -1032,6 +1165,9 @@ ggplot(cbsa_metrics, aes(x = avg_comp_z, y = rent_burden_change)) +
 
 ```
 
+We can see from the plot that the YIMBYs lie in the lower right quadrant. Meaning the values in this area have positive housing growth and a decreasing rent burden.
+
+## Time Plot for possible YIMBYs 
 ```{r}
 library(dplyr)
 library(tidyr)
@@ -1113,6 +1249,8 @@ ggplot(plot_data, aes(year, RENT_BURDEN, color = color_group, group = GEOID)) +
   theme(legend.position = "bottom")
 
 ```
+
+The plot shows the decrease in rent for our top 5 YIMBYs since 2014. 
 
 ## Task 7 Policy Breif
 
