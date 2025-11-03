@@ -12,9 +12,9 @@ format:
 ---
 # Introduction
 
-We are examining the relationship between housing growth and rent burden. Throughout this analysis we will look at the effect of income on  rent cost, income by state and industry, the effects of COVID 19 on employment in the healthcare industry, and population growth. In this analysis we will conduct a search for YIMBYs, or Yes In My Backyard citites. These cities allow for housing growth, account for population growth, and have lowered rent cost over our study period.
+We are examining the relationship between housing growth and rent burden. Throughout this analysis we will look at the effect of income on  rent cost, income by state and industry, the effects of COVID 19 on employment in the healthcare industry, and population growth. In this analysis we will conduct a search for YIMBYs, or Yes In My Backyard cities. These cities allow for housing growth, account for population growth, and have lowered rent cost over our study period.
 
-# Data Aquisition
+# Data Acquisition
 
 ```{r}
 if(!dir.exists(file.path("data", "mp02"))){
@@ -402,7 +402,7 @@ albuquerque_permits <- PERMITS |>
 
 ```
 
-ALbuquerque, NM permitted the most new units in **2021**.
+Albuquerque, NM permitted the most new units in **2021**.
 
 ## Which state (not CBSA) had the highest average individual income in 2015? 
 ```{r}
@@ -467,7 +467,7 @@ formatRound(
 
 Washington DC had the highest individual income by state in 2015 at **$33,233**.
 
-## Data scientists and business analysts are recorded under NAICS code 5182. What is the last year in which the NYC CBSA had the most data scientists in the country? In recent, the San Francisco CBSA has had the most data scientists.
+## Data scientists and business analysts are recorded under NAICS code 5182. What is the last year in which the NYC CBSA had the most data scientists in the country? In recent years, the San Francisco CBSA has had the most data scientists.
 ```{r}
 
 library(dplyr)
@@ -1275,7 +1275,7 @@ ggplot(plot_data, aes(year, RENT_BURDEN, color = color_group, group = GEOID)) +
 
 The plot shows the decrease in rent for our top 5 YIMBYs since 2014. Our top 5 YIMBY candidates do behave like YIMBYS as we defined earlier in terms of rent decrease over our period of time since 2014.
 
-# Task 7 Policy Breif
+# Task 7 Policy Brief
 
 ### **Introduction**
 
@@ -1287,7 +1287,7 @@ We will have one representative from our YIMBY city Burlington, North Carolina, 
 
 ### **Potential Benefits from our Policy**
 
-NYC is a major hub for the arts, education, and city jobs. Modeling NYC's policies to rival one of a NIMBY city may be difficult purely because of the geography of Manhattan, however these policies would benefit local artists, students, and city workers such as MTA employees. Giving these groups access to more affordable, nice housing would allow them to flourish and, in turn, give them a suitable foundation to boost the economy. MTA workers would especially benefit and, since NYC relies on MTA workers to keep the city functioning, this benefit would lead to the running optimally. The resident of Burlington, North Carolina also have countless city jobs and many residents rely on these city jobs for income. Burlington, North Carolina is located near several universities - conveniently located approximately 30 minutes from Duke - so students and recent graduates would also benefit for more available housing and a lower rent cost. NYC is home to many colleges and universities, so students in NYC would benefit from these policies as well. 
+NYC is a major hub for the arts, education, and city jobs. Modeling NYC's policies to rival one of a NIMBY city may be difficult purely because of the geography of Manhattan, however these policies would benefit local artists, students, and city workers such as MTA employees. Giving these groups access to more affordable, nice housing would allow them to flourish and, in turn, give them a suitable foundation to boost the economy. MTA workers would especially benefit and, since NYC relies on MTA workers to keep the city functioning, this benefit would lead to the running optimally. The residents of Burlington, North Carolina also have countless city jobs and many residents rely on these city jobs for income. Burlington, North Carolina is located near several universities - conveniently located approximately 30 minutes from Duke - so students and recent graduates would also benefit from more available housing and a lower rent cost. NYC is home to many colleges and universities, so students in NYC would benefit from these policies as well. 
 
 ### **Metrics**
 
