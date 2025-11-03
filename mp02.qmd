@@ -1,0 +1,1126 @@
+---
+title: Mini Project 2
+format:
+  html:
+    code-fold: true  
+    code-tools: true 
+---
+## Downloading the data
+
+```{r}
+if(!dir.exists(file.path("data", "mp02"))){
+  dir.create(file.path("data", "mp02"), showWarnings=FALSE, recursive=TRUE)
+}
+
+library <- function(pkg){
+  ## Mask base::library() to automatically install packages if needed
+  ## Masking is important here so downlit picks up packages and links
+  ## to documentation
+  pkg <- as.character(substitute(pkg))
+  options(repos = c(CRAN = "https://cloud.r-project.org"))
+  if(!require(pkg, character.only=TRUE, quietly=TRUE)) install.packages(pkg)
+  stopifnot(require(pkg, character.only=TRUE, quietly=TRUE))
+}
+
+library(tidyverse)
+library(glue)
+library(readxl)
+library(tidycensus)
+
+get_acs_all_years <- function(variable, geography="cbsa",
+                              start_year=2009, end_year=2023){
+  fname <- glue("{variable}_{geography}_{start_year}_{end_year}.csv")
+  fname <- file.path("data", "mp02", fname)
+  
+  if(!file.exists(fname)){
+    YEARS <- seq(start_year, end_year)
+    YEARS <- YEARS[YEARS != 2020] # Drop 2020 - No survey (covid)
+    
+    ALL_DATA <- map(YEARS, function(yy){
+      tidycensus::get_acs(geography, variable, year=yy, survey="acs1") |>
+        mutate(year=yy) |>
+        select(-moe, -variable) |>
+        rename(!!variable := estimate)
+    }) |> bind_rows()
+    
+    write_csv(ALL_DATA, fname)
+  }
+  
+  read_csv(fname, show_col_types=FALSE)
+}
+
+# Household income (12 month)
+INCOME <- get_acs_all_years("B19013_001") |>
+  rename(household_income = B19013_001)
+
+# Monthly rent
+RENT <- get_acs_all_years("B25064_001") |>
+  rename(monthly_rent = B25064_001)
+
+# Total population
+POPULATION <- get_acs_all_years("B01003_001") |>
+  rename(population = B01003_001)
+
+# Total number of households
+HOUSEHOLDS <- get_acs_all_years("B11001_001") |>
+  rename(households = B11001_001)
+```
+
+```{r}
+get_building_permits <- function(start_year = 2009, end_year = 2023){
+  fname <- glue("housing_units_{start_year}_{end_year}.csv")
+  fname <- file.path("data", "mp02", fname)
+  
+  if(!file.exists(fname)){
+    HISTORICAL_YEARS <- seq(start_year, 2018)
+    
+    HISTORICAL_DATA <- map(HISTORICAL_YEARS, function(yy){
+      historical_url <- glue("https://www.census.gov/construction/bps/txt/tb3u{yy}.txt")
+      
+      LINES <- readLines(historical_url)[-c(1:11)]
+      
+      CBSA_LINES <- str_detect(LINES, "^[[:digit:]]")
+      CBSA <- as.integer(str_sub(LINES[CBSA_LINES], 5, 10))
+      
+      PERMIT_LINES <- str_detect(str_sub(LINES, 48, 53), "[[:digit:]]")
+      PERMITS <- as.integer(str_sub(LINES[PERMIT_LINES], 48, 53))
+      
+      data_frame(CBSA = CBSA,
+                 new_housing_units_permitted = PERMITS, 
+                 year = yy)
+    }) |> bind_rows()
+    
+    CURRENT_YEARS <- seq(2019, end_year)
+    
+    CURRENT_DATA <- map(CURRENT_YEARS, function(yy){
+      current_url <- glue("https://www.census.gov/construction/bps/xls/msaannual_{yy}99.xls")
+      
+      temp <- tempfile()
+      
+      download.file(current_url, destfile = temp, mode="wb")
+      
+      fallback <- function(.f1, .f2){
+        function(...){
+          tryCatch(.f1(...), 
+                   error=function(e) .f2(...))
+        }
+      }
+      
+      reader <- fallback(read_xlsx, read_xls)
+      
+      reader(temp, skip=5) |>
+        na.omit() |>
+        select(CBSA, Total) |>
+        mutate(year = yy) |>
+        rename(new_housing_units_permitted = Total)
+    }) |> bind_rows()
+    
+    ALL_DATA <- rbind(HISTORICAL_DATA, CURRENT_DATA)
+    
+    write_csv(ALL_DATA, fname)
+    
+  }
+  
+  read_csv(fname, show_col_types=FALSE)
+}
+
+PERMITS <- get_building_permits()
+```
+
+```{r}
+get_building_permits <- function(start_year = 2009, end_year = 2023){
+  fname <- glue("housing_units_{start_year}_{end_year}.csv")
+  fname <- file.path("data", "mp02", fname)
+  
+  if(!file.exists(fname)){
+    HISTORICAL_YEARS <- seq(start_year, 2018)
+    
+    HISTORICAL_DATA <- map(HISTORICAL_YEARS, function(yy){
+      historical_url <- glue("https://www.census.gov/construction/bps/txt/tb3u{yy}.txt")
+      
+      LINES <- readLines(historical_url)[-c(1:11)]
+      
+      CBSA_LINES <- str_detect(LINES, "^[[:digit:]]")
+      CBSA <- as.integer(str_sub(LINES[CBSA_LINES], 5, 10))
+      
+      PERMIT_LINES <- str_detect(str_sub(LINES, 48, 53), "[[:digit:]]")
+      PERMITS <- as.integer(str_sub(LINES[PERMIT_LINES], 48, 53))
+      
+      data_frame(CBSA = CBSA,
+                 new_housing_units_permitted = PERMITS, 
+                 year = yy)
+    }) |> bind_rows()
+    
+    CURRENT_YEARS <- seq(2019, end_year)
+    
+    CURRENT_DATA <- map(CURRENT_YEARS, function(yy){
+      current_url <- glue("https://www.census.gov/construction/bps/xls/msaannual_{yy}99.xls")
+      
+      temp <- tempfile()
+      
+      download.file(current_url, destfile = temp, mode="wb")
+      
+      fallback <- function(.f1, .f2){
+        function(...){
+          tryCatch(.f1(...), 
+                   error=function(e) .f2(...))
+        }
+      }
+      
+      reader <- fallback(read_xlsx, read_xls)
+      
+      reader(temp, skip=5) |>
+        na.omit() |>
+        select(CBSA, Total) |>
+        mutate(year = yy) |>
+        rename(new_housing_units_permitted = Total)
+    }) |> bind_rows()
+    
+    ALL_DATA <- rbind(HISTORICAL_DATA, CURRENT_DATA)
+    
+    write_csv(ALL_DATA, fname)
+    
+  }
+  
+  read_csv(fname, show_col_types=FALSE)
+}
+
+PERMITS <- get_building_permits()
+```
+
+```{r}
+library(httr2)
+library(rvest)
+get_bls_industry_codes <- function(){
+  fname <- fname <- file.path("data", "mp02", "bls_industry_codes.csv")
+  
+  if(!file.exists(fname)){
+    
+    resp <- request("https://www.bls.gov") |> 
+      req_url_path("cew", "classifications", "industry", "industry-titles.htm") |>
+      req_headers(`User-Agent` = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:143.0) Gecko/20100101 Firefox/143.0") |> 
+      req_error(is_error = \(resp) FALSE) |>
+      req_perform()
+    
+    resp_check_status(resp)
+    
+    naics_table <- resp_body_html(resp) |>
+      html_element("#naics_titles") |> 
+      html_table() |>
+      mutate(title = str_trim(str_remove(str_remove(`Industry Title`, Code), "NAICS"))) |>
+      select(-`Industry Title`) |>
+      mutate(depth = if_else(nchar(Code) <= 5, nchar(Code) - 1, NA)) |>
+      filter(!is.na(depth))
+    
+    naics_table <- naics_table |> 
+      filter(depth == 4) |> 
+      rename(level4_title=title) |> 
+      mutate(level1_code = str_sub(Code, end=2), 
+             level2_code = str_sub(Code, end=3), 
+             level3_code = str_sub(Code, end=4)) |>
+      left_join(naics_table, join_by(level1_code == Code)) |>
+      rename(level1_title=title) |>
+      left_join(naics_table, join_by(level2_code == Code)) |>
+      rename(level2_title=title) |>
+      left_join(naics_table, join_by(level3_code == Code)) |>
+      rename(level3_title=title) |>
+      select(-starts_with("depth")) |>
+      rename(level4_code = Code) |>
+      select(level1_title, level2_title, level3_title, level4_title, 
+             level1_code,  level2_code,  level3_code,  level4_code)
+    
+    write_csv(naics_table, fname)
+  }
+  
+  read_csv(fname, show_col_types=FALSE)
+  
+}
+
+INDUSTRY_CODES <- get_bls_industry_codes()
+
+```
+
+```{r}
+library(httr2)
+library(rvest)
+get_bls_qcew_annual_averages <- function(start_year=2009, end_year=2023){
+  fname <- glue("bls_qcew_{start_year}_{end_year}.csv.gz")
+  fname <- file.path("data", "mp02", fname)
+  
+  YEARS <- seq(start_year, end_year)
+  YEARS <- YEARS[YEARS != 2020] # Drop Covid year 
+  
+  if(!file.exists(fname)){
+    ALL_DATA <- map(YEARS, .progress=TRUE, possibly(function(yy){
+      fname_inner <- file.path("data", "mp02", glue("{yy}_qcew_annual_singlefile.zip"))
+      
+      if(!file.exists(fname_inner)){
+        request("https://www.bls.gov") |> 
+          req_url_path("cew", "data", "files", yy, "csv",
+                       glue("{yy}_annual_singlefile.zip")) |>
+          req_headers(`User-Agent` = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:143.0) Gecko/20100101 Firefox/143.0") |> 
+          req_retry(max_tries=5) |>
+          req_perform(fname_inner)
+      }
+      
+      if(file.info(fname_inner)$size < 755e5){
+        warning(sQuote(fname_inner), "appears corrupted. Please delete and retry this step.")
+      }
+      
+      read_csv(fname_inner, 
+               show_col_types=FALSE) |> 
+        mutate(YEAR = yy) |>
+        select(area_fips, 
+               industry_code, 
+               annual_avg_emplvl, 
+               total_annual_wages, 
+               YEAR) |>
+        filter(nchar(industry_code) <= 5, 
+               str_starts(area_fips, "C")) |>
+        filter(str_detect(industry_code, "-", negate=TRUE)) |>
+        mutate(FIPS = area_fips, 
+               INDUSTRY = as.integer(industry_code), 
+               EMPLOYMENT = as.integer(annual_avg_emplvl), 
+               TOTAL_WAGES = total_annual_wages) |>
+        select(-area_fips, 
+               -industry_code, 
+               -annual_avg_emplvl, 
+               -total_annual_wages) |>
+        filter(INDUSTRY != 10) |> 
+        mutate(AVG_WAGE = TOTAL_WAGES / EMPLOYMENT)
+    })) |> bind_rows()
+    
+    write_csv(ALL_DATA, fname)
+  }
+  
+  ALL_DATA <- read_csv(fname, show_col_types=FALSE)
+  
+  ALL_DATA_YEARS <- unique(ALL_DATA$YEAR)
+  
+  YEARS_DIFF <- setdiff(YEARS, ALL_DATA_YEARS)
+  
+  if(length(YEARS_DIFF) > 0){
+    stop("Download failed for the following years: ", YEARS_DIFF, 
+         ". Please delete intermediate files and try again.")
+  }
+  
+  ALL_DATA
+}
+
+WAGES <- get_bls_qcew_annual_averages()
+
+```
+
+
+# Task 1
+
+## Which CBSA (by name) permitted the largest number of new housing units in the decade from 2010 to 2019 (inclusive)?
+```{r}
+library(DT)
+library(dplyr)
+#finding CSBA name in income data
+
+library(dplyr)
+library(DT) 
+
+
+CBSA_NAME_CANONICAL <- INCOME |>
+  group_by(GEOID) |>
+  
+  summarize(NAME = first(NAME), .groups = "drop") |>
+  mutate(CBSA = as.character(GEOID))
+
+
+result <- PERMITS |>
+  mutate(CBSA = as.character(CBSA)) |>
+  left_join(CBSA_NAME_CANONICAL |> select(CBSA, NAME), by = "CBSA") |>
+  filter(year >= 2010, year <= 2019) |>
+  group_by(NAME, CBSA) |>
+  summarize(total_units = sum(new_housing_units_permitted), .groups = "drop") |>
+  arrange(desc(total_units))
+
+
+datatable(
+  result |>
+    rename(Location = NAME,
+           `New permits` = total_units) |>
+    select(Location, CBSA, `New permits`),
+  caption = "Largest Number of New Units",
+  rownames = FALSE,
+  options = list(pageLength = 10, autoWidth = TRUE, dom = "tip")
+)
+
+ 
+```
+
+Houston TX permitted the largest number of new housing units from 2010 to 2019 with 482,075 new units permitted.
+
+## In what year did Albuquerque, NM (CBSA Number 10740) permit the most new housing units?
+```{r}
+library(dplyr)
+
+albuquerque_permits <- PERMITS |>
+  filter(CBSA == "10740") |>
+  group_by(CBSA, year) |>
+  summarize(
+    new_units = sum(new_housing_units_permitted, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  arrange(desc(new_units))
+ datatable(
+  albuquerque_permits |>
+    rename(
+      `CBSA ID` = CBSA,
+      Year = year,
+      `New Units Permitted` = new_units
+    ) |>
+    
+    select(Year, `CBSA ID`, `New Units Permitted`),
+  
+
+  caption = "New Housing Units in Albuquerque, NM",
+  rownames = FALSE,
+  options = list(
+    pageLength = 10,
+    dom = 'tip', 
+    autoWidth = TRUE
+  )
+)
+
+```
+\
+ALbuquerque NM permitted the most new units in 2021.
+
+## Which state (not CBSA) had the highest average individual income in 2015? 
+```{r}
+library(dplyr)
+library(stringr)
+
+
+cbsa_2015 <-
+  INCOME |>
+  filter(year == 2015) |>
+  left_join(
+    HOUSEHOLDS |> filter(year == 2015) |> select(GEOID, NAME, year, households),
+    by = c("GEOID","NAME","year")
+  ) |>
+  left_join(
+    POPULATION |> filter(year == 2015) |> select(GEOID, NAME, year, population),
+    by = c("GEOID","NAME","year")
+  ) |>
+mutate(state = str_extract(NAME, ", (.{2})", group=1))|>     
+   mutate(total_income_cbsa = household_income * households
+  )
+
+
+top_state_2015 <-
+  cbsa_2015 |>
+  group_by(state) |>
+  summarize(
+    total_income = sum(total_income_cbsa, na.rm = TRUE),
+    total_pop    = sum(population,       na.rm = TRUE),
+    avg_individual_income = total_income / total_pop,
+    .groups = "drop"
+  ) |>
+  arrange(desc(avg_individual_income))
+
+datatable(
+  top_state_2015 |>
+    rename(
+      State = state,
+      `Avg Individual Income` = avg_individual_income,
+      `Total State Income` = total_income,
+      `Total Population` = total_pop
+    ),
+  caption = "Highest Individual Income by State",
+  rownames = FALSE,
+  options = list(
+    pageLength = 10,
+    dom = 'tip',
+    autoWidth = TRUE
+  )
+) |>
+  formatCurrency(
+    columns = c("Avg Individual Income", "Total State Income"),
+    currency = "$",
+    digits = 0
+  ) |>
+formatRound(
+    columns = "Total Population",
+    digits = 0
+  )
+  
+```
+
+Washington DC had the highest individual income by state at $33,233.
+
+## Data scientists and business analysts are recorded under NAICS code 5182. What is the last year in which the NYC CBSA had the most data scientists in the country? In recent, the San Francisco CBSA has had the most data scientists.
+```{r}
+
+library(dplyr)
+library(stringr)
+library(DT)
+
+bls_5182 <- WAGES |>
+  filter(INDUSTRY == 5182) |>
+  mutate(cbsa_num = as.integer(paste0(sub("^C", "", FIPS), "0"))) |>
+  select(cbsa_num, YEAR, EMPLOYMENT)
+
+cbsa_lookup <- INCOME |>
+  group_by(GEOID) |>
+  summarize(NAME = first(NAME), .groups = "drop") |>
+  mutate(CBSA_num = as.integer(GEOID)) |>
+  select(CBSA_num, NAME)
+
+ds_named <- inner_join(bls_5182, cbsa_lookup, by = c("cbsa_num" = "CBSA_num"))
+
+most_by_year <- ds_named |>
+  group_by(YEAR) |>
+  slice_max(EMPLOYMENT, n = 1, with_ties = FALSE) |>
+  ungroup()
+
+nyc_cbsa <- cbsa_lookup |>
+  filter(str_detect(NAME, "^New York")) |>
+  slice(1) |>
+  pull(CBSA_num)
+
+nyc_last_most <- most_by_year |>
+  filter(cbsa_num == nyc_cbsa) |>
+  slice_max(YEAR, n = 1, with_ties = FALSE)
+
+result <- nyc_last_most |>
+  transmute(year = YEAR, employment = EMPLOYMENT)
+
+datatable(
+  result |> rename(Year = year, `Data Scientists` = employment),
+  options = list(pageLength = 5, dom = 't', ordering = FALSE),
+  rownames = FALSE,
+  caption = "NYC Data Scientists"
+)
+
+```
+
+Nyc had the most data scientists in 2015 with 18,922 data scientists.
+
+## What fraction of total wages in the NYC CBSA was earned by people employed in the finance and insurance industries (NAICS code 52)? In what year did this fraction peak?
+```{r}
+
+
+
+wages_now <-
+  WAGES |>
+  mutate(cbsa = as.integer(paste0(sub("^C","", FIPS), "0")))
+
+nyc_wages <-
+  wages_now |>
+  filter(cbsa == 35620) |>
+  group_by(YEAR) |>
+  summarize(
+    total_wages_all = sum(TOTAL_WAGES, na.rm = TRUE),
+    total_wages_fin = sum(TOTAL_WAGES[INDUSTRY == 52], na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(finance_fraction = total_wages_fin / total_wages_all) |>
+  arrange(desc(finance_fraction))
+
+library(DT)
+
+tbl <- nyc_wages |>
+  transmute(
+    Year = YEAR,
+    `Total Wages` = total_wages_all,
+    `Total Wages for Finance` = total_wages_fin,
+    `Finance Percent` = finance_fraction
+  )
+
+result <- datatable(
+  tbl,
+  options = list(pageLength = 25, autoWidth = TRUE),
+  rownames = FALSE,
+  caption = "NYC CBSA: finance wage share by year"
+) |>
+  formatCurrency(c("Total Wages","Total Wages for Finance"), currency = "$", digits = 0) |>
+  formatPercentage("Finance Percent", 1)
+
+result  
+
+
+```
+
+4.6% of total wages in the NYC CBSA was earned by people in the finance and insurance industry at its peak in 2014.
+
+# Task 3
+
+## The relationship between monthly rent and average household income per CBSA in 2009.
+```{r, message=FALSE, warning=FALSE}
+library(scales)
+cbsa_2009 <-
+  RENT |> filter(year == 2009) |>
+  select(GEOID, NAME, year, monthly_rent) |>
+  inner_join(
+    INCOME |> filter(year == 2009) |> select(GEOID, NAME, year, household_income),
+    by = c("GEOID","NAME","year")
+  )
+
+ggplot(cbsa_2009, aes(x = household_income, y = monthly_rent)) +
+  geom_point(alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_x_continuous(labels = dollar_format()) +
+  scale_y_continuous(labels = dollar_format()) +
+  labs(
+    title = "Monthly Rent vs Household Income by CBSA (2009)",
+    x = "Average household income",
+    y = "Average monthly rent"
+  ) +
+  theme_minimal()
+```
+
+
+## The relationship between total employment and total employment in the health care and social services sector (NAICS 62) across different CBSAs. Design your visualization so that it is possible to see the evolution of this relationship over time.
+```{r}
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+
+total_emp <- WAGES |>
+  mutate(cbsa = as.integer(paste0(sub("^C", "", FIPS), "0"))) |>
+  group_by(cbsa, YEAR) |>
+  summarise(total_emp = sum(EMPLOYMENT, na.rm = TRUE), .groups = "drop")
+
+#Health care 
+health_emp <- WAGES |>
+  filter(INDUSTRY == 62) |>
+  mutate(cbsa = as.integer(paste0(sub("^C", "", FIPS), "0"))) |>
+  group_by(cbsa, YEAR) |>
+  summarise(health_emp = sum(EMPLOYMENT, na.rm = TRUE), .groups = "drop")
+
+
+emp_df <- inner_join(total_emp, health_emp, by = c("cbsa", "YEAR"))
+
+# Plot
+ggplot(emp_df, aes(x = total_emp / 1e6, y = health_emp / 1e6, color = factor(cbsa))) +
+  geom_point(alpha = 0.5, size = 1.6, show.legend = FALSE) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.6, color = "grey40") +
+  scale_x_continuous(labels = comma, name = "Total employment (millions)") +
+  scale_y_continuous(labels = comma, name = "Health care (millions)") +
+  facet_wrap(~ YEAR, ncol = 4) +
+  labs(title = "Health Care vs Total Employment") +
+  theme_minimal(base_size = 13)
+
+
+```
+
+
+## The evolution of average household size over time. Use different lines to represent different CBSAs.
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(gghighlight)
+
+
+hh_pop <- HOUSEHOLDS |>
+  select(GEOID, NAME, households, year) |>
+  inner_join(
+    POPULATION |> select(GEOID, population, year),
+    by = c("GEOID", "year")
+  ) |>
+  mutate(
+    avg_household_size = population / households,
+    metro_area = case_when(
+      GEOID == 35620 ~ "NYC",                 
+      GEOID %in% c(31080, 31100) ~ "LA",      
+      TRUE ~ "Other CBSAs"
+    )
+  )
+
+ggplot(hh_pop, aes(x = year, y = avg_household_size, group = GEOID)) +
+  geom_line(aes(color = metro_area), linewidth = 0.9) +
+  geom_point(aes(color = metro_area), size = 1.6) +
+  gghighlight(
+    metro_area %in% c("NYC", "LA"),
+    label_key = metro_area,
+    unhighlighted_params = list(color = "gray80", alpha = 0.25),
+    use_group_by = FALSE
+  ) +
+  
+  scale_color_manual(values = c("NYC" = "#377eb8", "LA" = "#e41a1c", "Other CBSAs" = "gray80")) +
+  labs(
+    title = "Evolution of Household Size by CBSA",
+    subtitle = "NYC and LA highlighted",
+    x = "Year",
+    y = "Average household size"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    axis.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_blank(),
+    legend.position = "none"
+  )
+```
+
+##Task 5
+```{r}
+
+RENT_BURDEN <- INCOME |>
+  inner_join(RENT, by = c("GEOID", "year", "NAME")) |>
+  mutate(
+    RENT_BURDEN = (monthly_rent * 12) / household_income
+  ) |>
+  filter(!is.na(RENT_BURDEN))
+
+baseline <- RENT_BURDEN |>
+  group_by(GEOID) |>
+  mutate(
+    BASE_2009 = RENT_BURDEN[year == 2009][1],
+    RENT_BURDEN_IDX = 100 * RENT_BURDEN / BASE_2009
+  ) |>
+  ungroup()
+
+
+  baseline |>
+  summarise(mean_rent_burden = mean(RENT_BURDEN, na.rm = TRUE),
+            mean_index = mean(RENT_BURDEN_IDX, na.rm = TRUE))
+  scaled_minmax <- baseline |>
+  group_by(year) |>
+  mutate(
+    min_val = min(RENT_BURDEN, na.rm = TRUE),
+    max_val = max(RENT_BURDEN, na.rm = TRUE),
+    RENT_BURDEN_MINMAX = 100 * (RENT_BURDEN - min_val) / (max_val - min_val)
+  ) |>
+  ungroup()
+
+```
+
+```{r}
+baseline |>
+  group_by(year) |>
+  mutate(
+    RENT_BURDEN_MINMAX =
+      100 * (RENT_BURDEN - min(RENT_BURDEN, na.rm = TRUE)) /
+            (max(RENT_BURDEN, na.rm = TRUE) - min(RENT_BURDEN, na.rm = TRUE))
+  ) |>
+  ungroup() |>
+  filter(GEOID == 12060) |>
+  arrange(year) |>
+  select(GEOID, NAME, year, RENT_BURDEN, RENT_BURDEN_IDX, RENT_BURDEN_MINMAX)
+
+
+```
+
+```{r}
+library(dplyr)
+
+# Compute yearly
+extremes <- baseline |>
+  group_by(year) |>
+  mutate(
+    RENT_BURDEN_MINMAX =
+      100 * (RENT_BURDEN - min(RENT_BURDEN, na.rm = TRUE)) /
+            (max(RENT_BURDEN, na.rm = TRUE) - min(RENT_BURDEN, na.rm = TRUE))
+  ) |>
+  ungroup() |>
+  group_by(NAME) |>
+  summarise(
+    mean_rent_burden = mean(RENT_BURDEN, na.rm = TRUE),
+    mean_scaled      = mean(RENT_BURDEN_MINMAX, na.rm = TRUE)
+  ) |>
+  arrange(desc(mean_scaled))
+
+# Top 5
+top_5 <- extremes |> slice_head(n = 5)
+
+# Bottom 5 
+bottom_5 <- extremes |> slice_tail(n = 5)
+
+
+
+```
+
+```{r}
+datatable(
+  top_5,
+  options = list(
+    pageLength = 5,
+    dom = 't',
+    ordering = FALSE
+  ),
+  colnames = c(
+    "CBSA Name" = "NAME",
+    "Mean Rent Burden" = "mean_rent_burden", 
+    "Mean Scaled Rent Burden" = "mean_scaled"
+  ),
+  caption = "Top 5 CBSAs"
+)
+```
+
+```{r}
+datatable(
+  bottom_5,
+  options = list(
+    pageLength = 5,
+    dom = 't',
+    ordering = FALSE
+  ),
+  colnames = c(
+    "CBSA Name" = "NAME",
+    "Mean Rent Burden" = "mean_rent_burden",
+    "Mean Scaled Rent Burden" = "mean_scaled"
+  ),
+  caption = "Bottom 5 CBSAs"
+)
+```
+
+```{r}
+library(dplyr)
+
+pop_growth_5yr <- POPULATION |>
+  arrange(GEOID, year) |>
+  group_by(GEOID, NAME) |>
+  mutate(
+    POP_5YR_AGO    = lag(population, 5),
+    POP_GROWTH_5YR = (population - POP_5YR_AGO) / POP_5YR_AGO
+  ) |>
+  filter(year >= 2014) |>
+  ungroup()
+
+#Instantaneous housing growth
+instant <- POPULATION |>
+  inner_join(PERMITS, by = c("GEOID" = "CBSA", "year" = "year")) |>
+  mutate(
+    INSTANT_PER_1K = 1000 * new_housing_units_permitted / population
+  ) |>
+  select(GEOID, NAME, year, INSTANT_PER_1K)
+
+
+rate_based <- pop_growth_5yr |>
+  inner_join(PERMITS, by = c("GEOID" = "CBSA", "year" = "year")) |>
+  mutate(
+    PERMITS_PER_1K  = 1000 * new_housing_units_permitted / population,
+    RATE_VS_POP_5YR = PERMITS_PER_1K / POP_GROWTH_5YR
+  ) |>
+  select(GEOID, NAME, year, RATE_VS_POP_5YR)
+
+
+housing_metrics <- instant |>
+  inner_join(rate_based, by = c("GEOID", "NAME", "year"))
+
+housing_metrics
+
+library(dplyr)
+
+
+housing_metrics_z <- housing_metrics |>
+  mutate(
+    INSTANT_Z = (INSTANT_PER_1K  - mean(INSTANT_PER_1K,  na.rm = TRUE)) /
+                sd(INSTANT_PER_1K,  na.rm = TRUE),
+    RATE_Z    = (RATE_VS_POP_5YR - mean(RATE_VS_POP_5YR, na.rm = TRUE)) /
+                sd(RATE_VS_POP_5YR, na.rm = TRUE),
+    COMPOSITE_Z = 0.5 * INSTANT_Z + 0.5 * RATE_Z
+  )
+
+# Top 10 and bottom 10 instant 
+top10_instant <- housing_metrics_z |>
+  arrange(desc(INSTANT_Z)) |>
+  select(GEOID, NAME, year, INSTANT_PER_1K, INSTANT_Z) |>
+  head(10)
+
+bottom10_instant <- housing_metrics_z |>
+  arrange(INSTANT_Z) |>
+  select(GEOID, NAME, year, INSTANT_PER_1K, INSTANT_Z) |>
+  head(10)
+
+# Top 10 and bottom 10 rate-based 
+top10_rate <- housing_metrics_z |>
+  arrange(desc(RATE_Z)) |>
+  select(GEOID, NAME, year, RATE_VS_POP_5YR, RATE_Z) |>
+  head(10)
+
+bottom10_rate <- housing_metrics_z |>
+  arrange(RATE_Z) |>
+  select(GEOID, NAME, year, RATE_VS_POP_5YR, RATE_Z) |>
+  head(10)
+top10_instant
+bottom10_instant
+top10_rate
+bottom10_rate
+
+```
+
+```{r}
+
+top10_composite <- housing_metrics_z |>
+  arrange(desc(COMPOSITE_Z)) |>
+  select(GEOID, NAME, INSTANT_PER_1K, RATE_VS_POP_5YR, COMPOSITE_Z) |>
+  head(10)
+
+bottom10_composite <- housing_metrics_z |>
+  arrange(COMPOSITE_Z) |>
+  select(GEOID, NAME, year, INSTANT_PER_1K, RATE_VS_POP_5YR, COMPOSITE_Z) |>
+  head(10)
+
+top10_composite
+bottom10_composite
+
+```
+
+
+##Task 6
+
+```{r}
+library(dplyr)
+library(DT)
+
+y0 <- 2014
+y1 <- max(RENT_BURDEN$year, na.rm = TRUE)
+N  <- 10
+
+
+rb_2014 <- RENT_BURDEN %>%
+  filter(year == y0) %>%
+  group_by(GEOID, NAME) %>%
+  summarize(rb_2014 = mean(RENT_BURDEN, na.rm = TRUE), .groups = "drop")
+
+rb_latest <- RENT_BURDEN %>%
+  filter(year == y1) %>%
+  group_by(GEOID, NAME) %>%
+  summarize(rb_latest = mean(RENT_BURDEN, na.rm = TRUE), .groups = "drop")
+
+rb_change <- rb_2014 %>%
+  inner_join(rb_latest, by = c("GEOID","NAME")) %>%
+  mutate(delta_rb = rb_latest - rb_2014) %>%
+  filter(!is.na(delta_rb))
+
+
+growth_z <- housing_metrics_z %>%
+  filter(year >= y0 & year <= y1) %>%
+  group_by(GEOID, NAME) %>%
+  summarize(avg_comp_z = mean(COMPOSITE_Z, na.rm = TRUE), .groups = "drop")
+
+pop_flags <- POPULATION %>%
+  filter(year %in% c(y0, y1)) %>%
+  group_by(GEOID) %>%
+  summarize(
+    pop_2014   = population[year == y0][1],
+    pop_latest = population[year == y1][1],
+    growing_population = pop_latest > pop_2014,
+    .groups = "drop"
+  ) %>%
+  select(GEOID, growing_population)
+
+# High initial burden cutoff (2014 median)
+rb_med <- median(rb_2014$rb_2014, na.rm = TRUE)
+
+# YIMBYs = high initial 2014 burden, rent decrease, pop growth, above-avg housing growth
+topN <- rb_change %>%
+  inner_join(growth_z, by = c("GEOID","NAME")) %>%
+  left_join(pop_flags, by = "GEOID") %>%
+  mutate(
+    high_initial_burden      = rb_2014 > rb_med,
+    decreasing_burden        = delta_rb < 0,
+    above_avg_housing_growth = avg_comp_z > 0
+  ) %>%
+  filter(high_initial_burden,
+         decreasing_burden,
+         growing_population,
+         above_avg_housing_growth) %>%
+  arrange(desc(avg_comp_z), delta_rb, NAME, GEOID) %>%
+  slice_head(n = N) %>%
+  select(GEOID, NAME, rb_2014, rb_latest, delta_rb, avg_comp_z)
+
+
+result <- DT::datatable(
+  topN %>%
+    rename(
+      `CBSA Code` = GEOID,
+      `CBSA Name` = NAME,
+      `Rent Burden 2014` = rb_2014,
+      `Rent Burden Latest` = rb_latest,
+      `Δ Rent Burden` = delta_rb,
+      `Avg Composite Z (≥2014)` = avg_comp_z
+    ),
+  rownames = FALSE,
+  options = list(pageLength = 25)
+)
+
+result
+
+```
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+baseline_us <- baseline %>% filter(substr(GEOID, 1, 2) != "72")
+y0 <- 2014
+y1 <- max(baseline_us$year, na.rm = TRUE)
+
+rb_change <- baseline_us %>%
+  filter(year %in% c(y0, y1)) %>%
+  select(GEOID, NAME, year, RENT_BURDEN) %>%
+  pivot_wider(names_from = year, values_from = RENT_BURDEN, names_prefix = "rb_") %>%
+  transmute(
+    GEOID, NAME,
+    initial_rent_burden = rb_2014,
+    latest_rent_burden  = .data[[paste0("rb_", y1)]],
+    rent_burden_change  = latest_rent_burden - initial_rent_burden
+  ) %>%
+  filter(!is.na(initial_rent_burden), !is.na(latest_rent_burden))
+
+avg_z <- housing_metrics_z %>%
+  filter(year >= y0 & year <= y1) %>%
+  group_by(GEOID, NAME) %>%
+  summarize(avg_comp_z = mean(COMPOSITE_Z, na.rm = TRUE), .groups = "drop")
+
+cbsa_metrics <- rb_change %>% inner_join(avg_z, by = c("GEOID","NAME"))
+
+
+rb2014_tbl <- baseline_us %>%
+  filter(year == y0) %>%
+  select(GEOID, rb2014 = RENT_BURDEN)
+
+rb2014_med <- median(rb2014_tbl$rb2014, na.rm = TRUE)
+
+pop_flags <- POPULATION %>%
+  filter(year %in% c(y0, y1)) %>%
+  select(GEOID, year, population) %>%
+  tidyr::pivot_wider(names_from = year, values_from = population, names_prefix = "pop_") %>%
+  transmute(GEOID, growing_population = .data[[paste0("pop_", y1)]] > pop_2014)
+
+cbsa_metrics <- cbsa_metrics %>%
+  select(GEOID, NAME, avg_comp_z, rent_burden_change) %>%
+  left_join(rb2014_tbl, by = "GEOID") %>%
+  left_join(pop_flags, by = "GEOID") %>%
+  mutate(
+    cbsa_type = ifelse(rb2014 > rb2014_med &
+                         rent_burden_change < 0 &
+                         growing_population &
+                         avg_comp_z > 0, "YIMBY", "Other"),
+    alpha_val = ifelse(cbsa_type == "YIMBY", 1, 0.6)
+  )
+
+housing_mean <- mean(cbsa_metrics$avg_comp_z, na.rm = TRUE)
+rent_change_zero <- 0
+
+ggplot(cbsa_metrics, aes(x = avg_comp_z, y = rent_burden_change)) +
+  annotate("rect",
+           xmin = housing_mean, xmax = Inf,
+           ymin = -Inf, ymax = rent_change_zero,
+           fill = "green", alpha = 0.08) +
+  geom_hline(yintercept = rent_change_zero, color = "gray50") +
+  geom_vline(xintercept = housing_mean, linetype = "dashed", color = "gray50") +
+  geom_point(aes(
+    color = cbsa_type,
+    size  = avg_comp_z,
+    alpha = alpha_val
+  )) +
+  scale_color_manual(values = c("YIMBY" = "#8073ac", "Other" = "gray70")) +
+  scale_alpha_identity() +
+  scale_y_continuous(labels = scales::percent) +
+  labs(
+    title = "Rent Burden Change vs Housing Growth",
+    x = "Housing Growth",
+    y = "Change in Rent Burden",
+    color = "CBSA Type",
+    size  = "Avg Composite Z"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(gghighlight)
+
+y0 <- 2014
+y1 <- max(RENT_BURDEN$year, na.rm = TRUE)
+
+rb_2014_tbl <- RENT_BURDEN %>%
+  filter(year == y0) %>%
+  group_by(GEOID, NAME) %>%
+  summarize(rb2014 = mean(RENT_BURDEN, na.rm = TRUE), .groups = "drop")
+
+rb_latest_tbl <- RENT_BURDEN %>%
+  filter(year == y1) %>%
+  group_by(GEOID, NAME) %>%
+  summarize(rb_latest = mean(RENT_BURDEN, na.rm = TRUE), .groups = "drop")
+
+rb_change <- rb_2014_tbl %>%
+  inner_join(rb_latest_tbl, by = c("GEOID","NAME")) %>%
+  mutate(delta_rb = rb_latest - rb2014) %>%
+  filter(!is.na(delta_rb))
+
+growth_z <- housing_metrics_z %>%
+  filter(year >= y0 & year <= y1) %>%
+  group_by(GEOID, NAME) %>%
+  summarize(avg_comp_z = mean(COMPOSITE_Z, na.rm = TRUE), .groups = "drop")
+
+pop_flags <- POPULATION %>%
+  filter(year %in% c(y0, y1)) %>%
+  select(GEOID, year, population) %>%
+  pivot_wider(names_from = year, values_from = population, names_prefix = "pop_") %>%
+  transmute(GEOID, growing_population = .data[[paste0("pop_", y1)]] > pop_2014)
+
+rb2014_cutoff <- median(rb_2014_tbl$rb2014, na.rm = TRUE)
+
+pool <- rb_change %>%
+  inner_join(growth_z, by = c("GEOID","NAME")) %>%
+  left_join(pop_flags, by = "GEOID") %>%
+  mutate(
+    high_initial_burden      = rb2014 > rb2014_cutoff,
+    decreasing_burden        = delta_rb < 0,
+    above_avg_housing_growth = avg_comp_z > 0
+  ) %>%
+  filter(high_initial_burden, decreasing_burden, growing_population, above_avg_housing_growth)
+
+topN <- pool %>%
+  arrange(desc(avg_comp_z), delta_rb, NAME, GEOID) %>%
+  slice_head(n = 10)
+
+top5 <- topN %>% slice_head(n = 5)
+
+name_map <- RENT_BURDEN %>%
+  group_by(GEOID) %>%
+  slice_max(year, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  select(GEOID, NAME)
+
+plot_data <- RENT_BURDEN %>%
+  filter(GEOID %in% pool$GEOID, !is.na(RENT_BURDEN)) %>%
+  select(GEOID, year, RENT_BURDEN) %>%
+  left_join(name_map, by = "GEOID") %>%
+  mutate(
+    highlight_flag = GEOID %in% top5$GEOID,
+    color_group = ifelse(NAME %in% top5$NAME, NAME, "Other")
+  )
+
+palette_pp <- setNames(c("#7B2CBF","#9D4EDD","#C77DFF","#F72585","#FF4D6D","grey75"),
+                       c(top5$NAME, "Other"))
+
+ggplot(plot_data, aes(year, RENT_BURDEN, color = color_group, group = GEOID)) +
+  geom_line(linewidth = 1) +
+  gghighlight(highlight_flag, use_direct_label = FALSE,
+              unhighlighted_params = list(colour = "grey75", alpha = 0.6)) +
+  scale_color_manual(values = palette_pp, name = "CBSA") +
+  labs(title = "YIMBY Top 5", x = "Year", y = "Rent Burden") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+
+```
+
+## Task 7 Policy Breif
+
+Across the country, especially in highly populated areas like NYC, rental costs are sky high. The rental market today is extremely competitive, driving prices higher. This limits families across the nation from affordable, high quality homes. While rental prices have climbed in NIMBY cities like NYC, increases in individual rent have not been sufficient to cover these costs. Students, or recent graduates, are particularly burdened when it comes to high rental costs. 
+
+We will have one respresentative from our YIMBY city Yuma Arizona, and one representative from NYC as sponsors for this bill. 
+
+NYC is a major hub for the arts, education, and city jobs. Modeling NYC's policies to rival one of a NIMBY city may be difficult purely because of the geography of Manhattan, however these policies would benefit local artists, students, and city workers such as MTA employees. Giving these groups access to more affordable, nice housing would allow them to flourish and, in turn, give them a suitable foundation to boost the economy. MTA workers would especially benefit and, since NYC relies on MTA workers to keep the city functioning, this benefit would lead to the running optimally. 
+
+
+

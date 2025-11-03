@@ -2,7 +2,6 @@
 .Rhistory
 .RData
 .Ruserdata
-
 **/.quarto/*
 .Rproj.user
 data/**
@@ -22,3 +21,4 @@ data/**
 **/gganim*
 /.quarto/
 **/*.quarto_ipynb
+no.qmd
