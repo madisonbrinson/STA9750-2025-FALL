@@ -1214,7 +1214,31 @@ result
 
 ```
 
-The following chart shows that district 6 greatly exceeds district 7 and district 8, the two districts with the highest number of total trees, in terms of high risk trees.
+The following chart shows that district 6 greatly exceeds district 7 and district 8, the two districts with the highest number of total trees, in terms of high risk trees. The following chart shows the tree counts for each district in Manhattan. We can assume that district 6 does **not** have the highest percentage of risky trees just because it has a high total number of trees. District 6 falls at number 6 on our chart, so, the amount of risky trees in district 6 come from attributes unique to district 6. 
+
+```{r}
+library(dplyr)
+library(DT)
+
+# Count total trees in each Manhattan district
+top3_total_trees <- trees_with_district |>
+  st_drop_geometry() |>
+  filter(as.integer(council_dist) %in% 1:10) |>   # Manhattan only
+  count(council_dist, name = "total_trees", sort = TRUE) |>
+  slice_head(n = 10)
+
+# Format as datatable
+result_top3_trees <- datatable(
+  top3_total_trees,
+  rownames = FALSE,
+  class = "compact",
+  options = list(dom = 't', paging = FALSE, ordering = TRUE, info = FALSE)
+)
+
+result_top3_trees
+
+
+```
 
 ### Comparison of Risky Trees in District 6, 7 and 8
 
@@ -1392,34 +1416,35 @@ risk_summary |>
 
 **District 6** also exceeds the surrounding Manhattan districts in terms of mean risk as shown by this chart. With our upcoming fall festival, we suggest pruning **1000+** trees for dead and unstable limbs, removing approximately **50** trees with a risk greater than 10, conducting structural inspections on all remaining trees with moderate to high risk, and hosting a community planting event in the weeks before the festival. 
 
-### Manhattan Districts Tree Totals
-```{r}
-library(dplyr)
-library(DT)
-
-# Count total trees in each Manhattan district
-top3_total_trees <- trees_with_district |>
-  st_drop_geometry() |>
-  filter(as.integer(council_dist) %in% 1:10) |>   # Manhattan only
-  count(council_dist, name = "total_trees", sort = TRUE) |>
-  slice_head(n = 10)
-
-# Format as datatable
-result_top3_trees <- datatable(
-  top3_total_trees,
-  rownames = FALSE,
-  class = "compact",
-  options = list(dom = 't', paging = FALSE, ordering = TRUE, info = FALSE)
-)
-
-result_top3_trees
 
 
-```
+
+
+
+
+
 
 ### Conclusion
 
 District 6 will benefit immensely from a Tree Safety & Fall Festival Initiative. Our initiative will not only promote the celebration of our district's trees and the important work of NYC's Parks and recreation department, but will also improve the overall safety of the highly trafficked streets. Our initiative will garner community support and appreciation for our trees and the employees of our city.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
