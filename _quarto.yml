@@ -10,7 +10,6 @@ website:
   navbar:
     background: primary
     search: false
-   navbar:
     left:
     - href: index.qmd
       text: Homepage
