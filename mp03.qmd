@@ -18,7 +18,7 @@ execute:
 
 
 ## Data Aquisition
-### NYC Districts
+### NYC Districts Data Set
 
 
 ```{r}
@@ -74,7 +74,7 @@ plot(sf::st_geometry(cds))
 
 
 ```
-### Tree Points
+### Tree Points Data Set
 ```{r}
 NYC_TreePoints <- function(dir_path    = "data/mp03",
                            limit       = 5000,

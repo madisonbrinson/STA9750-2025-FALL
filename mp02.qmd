@@ -12,7 +12,7 @@ format:
 ---
 
 
-![](housing.png){width = 30%}
+
 
 
 # Introduction
