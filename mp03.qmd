@@ -18,6 +18,8 @@ execute:
 # NYC's Trees
 
 ## Data Aquisition
+
+
 ### NYC Districts Data Set
 
 
@@ -332,7 +334,7 @@ result
 
 ```
 
-Council District 51 has the most Trees with 70,965 trees.
+**Council District 51** has the most Trees with **70,965** trees.
 
 ### Which council district has the highest density of trees?
 ```{r}
@@ -385,7 +387,7 @@ result
 
 ```
 
-Council District 7 has the highest density of trees.
+**Council District 7** has the highest density of trees.
 
 ### Plot of Density in District 7
 
@@ -545,7 +547,7 @@ result
 
 
 ```
-District 32 has the highest fraction of dead trees at aproximately 14.255%.
+**District 32** has the highest fraction of dead trees at approximately **14.255%**.
 
 ### Map of Dead Trees in District 32 
 
@@ -660,7 +662,7 @@ result
 
 
 ```
-The Thornlesss Honeylocust is the most common tree in Manhattan, with 17,310 trees within the city.
+**The Thornlesss Honeylocust** is the most common tree in Manhattan, with **17,310** trees within the city.
 
 ### Top Five Trees in Manhattan Map
 
@@ -787,7 +789,7 @@ DT::datatable(
 
 ```
 
-The closest tree to Baruch College is the Callery Pear, at 15.49 meters away.
+The closest tree to Baruch College is the **Callery Pear**, at **15.49** meters away.
 
 ### Callery Pear Trees around Baruch College
 ```{r}
@@ -876,7 +878,7 @@ This interactive map shows all the Callery Pear trees within a 500 meter radius 
 
 ### Callery Pear Tree
 
-![](callery_pear.png)
+![](callery_pear.png){width=50% fig-align="center"}
 
 
 ## Downloading NYC Parks & Recreation Data Sets 
@@ -988,61 +990,17 @@ parks_work <- download_socrata_csv(
 With these new data sets from NYC's Parks and Recreation we can find out information about work orders, and the overall safety of trees across our council districts.
 
 ## Task Policy
-District 6 Tree Safety & Fall Festival Initiative
 
-District 6 is home to some of Manhattan's most neighborhoods and features, representing Hell's Kitchen, The Upper west Side and Central Park it is the perfect district to host a fall festival. Our Fall Festival Initiative aims to promote appreciation of NYC's trees and bring awareness to the overall need for tree maintenance and safety of our trees. While our festival will be celebrating fall colors, we will also be honoring the work done by NYC's Parks and Recreation Department.
+### District 6 Tree Safety & Fall Festival Initiative
 
-
-![](Fallcolors.png)
-
-The Top 5 trees in, shown in the image above and the table below, are The Honeylocust, Pin Oak, London Planetree, Maidenhair, and American elm. These trees produce iconic fall colors and we will be highlighting these trees during our festival, but all of trees in District 6 will be appreciated.
+**District 6** is home to some of Manhattan's most neighborhoods and features, representing Hell's Kitchen, The Upper west Side and Central Park it is the perfect district to host a fall festival. Our Fall Festival Initiative aims to promote appreciation of NYC's trees and bring awareness to the overall need for tree maintenance and safety of our trees. While our festival will be celebrating fall colors, we will also be honoring the work done by NYC's Parks and Recreation Department.
 
 
-### Data Table for Top Trees in District 6 
-```{r}
-library(dplyr)
-library(stringr)
-library(sf)
-library(DT)
-library(purrr)
+![](Fallcolors.png){width=50% fig-align="center"}
 
-# 1. Keep only living Manhattan trees, drop geometry
-living_manhattan <- manhattan_trees |>
-  filter(!str_detect(tpcondition, "(?i)dead|stump")) |>
-  st_drop_geometry()
+The Top 5 trees in, shown in the image above, are The Honeylocust, Pin Oak, London Planetree, Maidenhair, and American elm. These trees produce iconic fall colors and we will be highlighting these trees during our festival, but all of trees in District 6 will be appreciated.
 
-# 2. Split data by council district (Manhattan has multiple)
-manhattan_split <- living_manhattan |>
-  group_split(council_dist)
-
-# 3. Create a named vector for indexing (district numbers)
-manhattan_districts <- living_manhattan |>
-  distinct(council_dist) |>
-  pull()
-
-# 4. For each district: take top 10 species & make a datatable
-top10_tables <- map2(
-  manhattan_split,
-  manhattan_districts,
-  ~ {
-    .x |>
-      count(genusspecies, sort = TRUE) |>
-      slice_head(n = 10) |>
-      datatable(
-        colnames = c("Species (genusspecies)", "Count"),
-        caption = paste("Top 10 Species — Manhattan Council District", .y),
-        options = list(dom = "t", paging = FALSE)
-      )
-  }
-)
-
-# 5. Output: a list of datatables, one for each Manhattan district
-top10_tables
-
-
-```
-
-The following chart and map highlight the prevalence of these trees in District 6.
+The following chart and map highlight the prevalence of these trees in **District 6**.
 
 ### Chart of Fall Color Trees in District 6
 ```{r}
@@ -1086,36 +1044,36 @@ library(sf)
 library(dplyr)
 library(leaflet)
 
-# 0) WGS84 for leaflet ---------------------------------------------------
+# WGS84 for leaflet 
 trees_wgs <- st_transform(trees_with_district, 4326)
 cds_wgs   <- st_transform(cds, 4326)
 
-# 1) District 6 only, with common name -----------------------------------
+# District 6, with common name 
 cd6_trees <- trees_wgs |>
   filter(as.integer(council_dist) == 6) |>
   mutate(
-    # Pull out common name after the " - "
+    
     common_name = sub("^.*-\\s*", "", genusspecies)
   )
 
-# 2) Top 5 most common species in District 6 -----------------------------
+# Top 5 most common species in District 6 
 top5_species_cd6 <- cd6_trees |>
   st_drop_geometry() |>
   count(common_name, sort = TRUE, name = "count") |>
   slice_head(n = 5) |>
   pull(common_name)
 
-# 3) Keep only trees from those 5 species --------------------------------
+# Keep only trees from those 5 species 
 cd6_top5 <- cd6_trees |>
   filter(common_name %in% top5_species_cd6)
 
-# 4) Color palette for the 5 species (unnamed domain to avoid jsonlite noise)
+# Color palette for the 5 species 
 pal <- colorFactor(
   palette = "Set2",
   domain  = unname(sort(unique(cd6_top5$common_name)))
 )
 
-# 5) Leaflet map ---------------------------------------------------------
+# Interactive map
 leaflet() |>
   addProviderTiles(providers$CartoDB.Positron) |>
 
@@ -1140,7 +1098,7 @@ leaflet() |>
     )
   ) |>
 
-  # IMPORTANT: give addLegend() explicit data so the formula has context
+ 
   addLegend(
     position = "bottomright",
     pal      = pal,
@@ -1156,7 +1114,7 @@ leaflet() |>
 
 ```
 
-In preparation for our Fall Festival, we analyzed the overall risk of these trees. This bring us to the next part of our proposal: why District 6? District 6 has the highest number of high risk trees in Manhattan at 2,967. Out of all the records from the Parks and Recreation department, 24% involved high risk trees. With 5,481 open work orders, District 6 is in desperate need of maintenance.
+In preparation for our Fall Festival, we analyzed the overall risk of these trees. This bring us to the next part of our proposal: why **District 6**? District 6 has the highest number of high risk trees in Manhattan at **2,967**. Out of all the records from the Parks and Recreation department, 24% involved high risk trees. With **5,481** open work orders, **District 6** is in desperate need of maintenance.
 
 ### Work Orders and High Risk Trees from NYC Parks Data Sets
 ```{r}
@@ -1165,7 +1123,7 @@ library(stringr)
 library(sf)
 library(DT)
 
-## 1. WORK ORDERS: Manhattan only, summarized by council district ----
+# Work Orders Manhattan only
 
 wo_manh <- parks_work |>
   st_drop_geometry() |>
@@ -1188,9 +1146,9 @@ work_summary <- wo_manh |>
     .groups = "drop"
   )
 
-## 2. RISK: join to work orders via inspectionglobalid, then summarize ----
+# Risk analysis
 
-# unique mapping from inspection -> district (Manhattan only)
+
 inspect_to_dist <- wo_manh |>
   distinct(inspectionglobalid, council_dist) |>
   filter(!is.na(inspectionglobalid))
@@ -1217,13 +1175,13 @@ risk_summary <- risk_join |>
     pct_elevated = round(100 * elevated_risk / total_risk_records, 1)
   )
 
-## 3. COMBINE work-order + risk summaries into one table ----
+# Combine work order and risk
 
 full_summary <- work_summary |>
   full_join(risk_summary, by = "council_dist") |>
   arrange(council_dist)
 
-# replace NAs with 0 where appropriate
+# replace NAs with 0 
 full_summary <- full_summary |>
   mutate(
     total_work_orders    = replace_na(total_work_orders, 0L),
@@ -1234,7 +1192,7 @@ full_summary <- full_summary |>
     pct_elevated         = replace_na(pct_elevated, 0)
   )
 
-## 4. Show combined table ----
+## Combined table
 
 result <- datatable(
   full_summary,
@@ -1264,12 +1222,12 @@ The following chart shows that district 6 greatly exceeds district 7 and distric
 library(dplyr)
 library(ggplot2)
 
-# 1. Filter to districts 6, 7, and 8
+# Filter to districts 6, 7, and 8
 risk_compare <- full_summary |>
   filter(council_dist %in% c(6, 7, 8))
 
 
-# 2. Bar chart: high-risk tree counts (not percent), all red
+# Bar chart: high-risk tree counts 
 ggplot(risk_compare,
        aes(x = factor(council_dist),
            y = elevated_risk)) +
@@ -1288,12 +1246,12 @@ ggplot(risk_compare,
 ### Interactive Map of High Risk Trees in District 6
 
 ```{r}
-# 1. Convert geometry to lon/lat + drop geometry
+# Convert geometry to lon/lat 
 library(sf)
 library(dplyr)
 library(leaflet)
 
-# 1. District 6 trees with numeric riskrating ----------------------------
+# District 6 trees with riskrating 
 trees_d6_high <- trees_with_district |>
   mutate(riskrating_num = suppressWarnings(as.numeric(riskrating))) |>
   filter(
@@ -1303,15 +1261,13 @@ trees_d6_high <- trees_with_district |>
   ) |>
   st_transform(4326)
 
-# Quick sanity check in the console
-nrow(trees_d6_high)
 
-# 2. District 6 polygon (for outline) -----------------------------------
+# District 6 polygon 
 cd6_poly <- cds |>
   st_transform(4326) |>
   filter(as.integer(CounDist) == 6)
 
-# 3. Leaflet map: District 6, high-risk trees in red --------------------
+# Interactive map District 6, high-risk trees in red 
 leaflet() |>
   addProviderTiles(providers$CartoDB.Positron) |>
 
@@ -1337,10 +1293,11 @@ leaflet() |>
     )
   ) |>
 
-  # Simple fixed view on District 6 (upper west / central park area)
+  # View on District 6 (upper west / central park area)
   setView(lng = -73.98, lat = 40.78, zoom = 13)
 
 ```
+
 Our map highlights the locations of these high risk trees.
 
 ### Mean Risk of Manhattan Trees 
@@ -1351,7 +1308,7 @@ library(DT)
 library(stringr)
 library(tidyr)
 
-# 1. Start from trees_with_district and keep Manhattan (districts 1–10)
+# Trees_with_district Manhattan (districts 1–10)
 trees_manh <- trees_with_district |>
   st_drop_geometry() |>
   mutate(
@@ -1361,7 +1318,7 @@ trees_manh <- trees_with_district |>
   ) |>
   filter(council_dist %in% 1:10)
 
-# 2. CONDITION summary by district
+# Condition by district
 condition_summary <- trees_manh |>
   group_by(council_dist, tpcondition) |>
   tally(name = "count") |>
@@ -1371,7 +1328,7 @@ condition_summary <- trees_manh |>
     values_fill = 0
   )
 
-# 3. RISK summary by district
+# risk by district
 risk_summary <- trees_manh |>
   group_by(council_dist) |>
   summarize(
@@ -1383,12 +1340,12 @@ risk_summary <- trees_manh |>
     .groups = "drop"
   )
 
-# 4. Combine CONDITION + RISK
+# Combine condition and risk 
 combined_summary <- risk_summary |>
   left_join(condition_summary, by = "council_dist") |>
   arrange(council_dist)
 
-# 5. Show result
+# Datatable
 result <- datatable(
   combined_summary,
   caption = "Tree Condition and Risk Rating by Manhattan Council District",
@@ -1399,6 +1356,7 @@ result
 
 
 ```
+
 ### Lolipop Chart for Mean Risk of Manhattan Trees
 
 ```{r}
@@ -1431,7 +1389,8 @@ risk_summary |>
   theme_minimal(base_size = 14)
 
 ```
-District 6 also exceeds the surrounding Manhattan districts in terms of mean risk as shown by this chart. With our upcoming fall festival, we suggest pruning 1000+ trees for dead and unstable limbs, removing approximately 50 trees with a risk greater than 10, conducting structural inspections on all remaining trees with moderate to high risk, and hosting a community planting event in the weeks before the festival. 
+
+**District 6** also exceeds the surrounding Manhattan districts in terms of mean risk as shown by this chart. With our upcoming fall festival, we suggest pruning **1000+** trees for dead and unstable limbs, removing approximately **50** trees with a risk greater than 10, conducting structural inspections on all remaining trees with moderate to high risk, and hosting a community planting event in the weeks before the festival. 
 
 ### Manhattan Districts Tree Totals
 ```{r}
@@ -1458,8 +1417,17 @@ result_top3_trees
 
 ```
 
-![](fallfestival.png)
-Conclusion:
+### Conclusion
+
+District 6 will benefit immensely from a Tree Safety & Fall Festival Initiative. Our initiative will not only promote the celebration of our district's trees and the important work of NYC's Parks and recreation department, but will also improve the overall safety of the highly trafficked streets. Our initiative will garner community support and appreciation for our trees and the employees of our city.
+
+
+
+![](fallfestival.png){width=50% fig-align="center"}
+
+
+### Conclusion
+
 District 6 will benefit immensely from a Tree Safety & Fall Festival Initiative. Our initiative will not only promote the celebration of our district's trees and the important work of NYC's Parks and recreation department, but will also improve the overall safety of the highly trafficked streets. Our initiative will garner community support and appreciation for our trees and the employees of our city.
 
 
