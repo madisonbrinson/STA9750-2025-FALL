@@ -8,7 +8,7 @@ format:
     toc-title: "Contents"
     toc-location: left
     smooth-scroll: true
-    theme: pulse
+    theme: flatly
 execute:
   warning: false
   message: false
@@ -1461,6 +1461,7 @@ result_top3_trees
 ![](fallfestival.png)
 Conclusion:
 District 6 will benefit immensely from a Tree Safety & Fall Festival Initiative. Our initiative will not only promote the celebration of our district's trees and the important work of NYC's Parks and recreation department, but will also improve the overall safety of the highly trafficked streets. Our initiative will garner community support and appreciation for our trees and the employees of our city.
+
 
 
 
