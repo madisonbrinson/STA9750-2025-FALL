@@ -1,0 +1,1466 @@
+---
+title: "Mini Project #03"
+format:
+  html:
+    code-fold: true
+    code-summary: "Show code"
+    toc: true
+    toc-title: "Contents"
+    toc-location: left
+    smooth-scroll: true
+    theme: flatly
+execute:
+  warning: false
+  message: false
+  echo: true   
+---
+
+
+
+## Data Aquisition
+### NYC Districts
+
+
+```{r}
+
+  NYC_CDs <- function(dir_path = "data/mp03") {
+  library(sf)
+  library(tidyverse)
+  library(httr2)
+
+  # 1. Make sure the directory exists
+  if (!dir.exists(dir_path)) {
+    dir.create(dir_path, recursive = TRUE)
+  }
+
+  # 2. Download the zip file only if needed
+  url <- "https://s-media.nyc.gov/agencies/dcp/assets/files/zip/data-tools/bytes/city-council/nycc_25c.zip"
+  zip_path <- file.path(dir_path, "nycc_25c.zip")
+
+  if (!file.exists(zip_path)) {
+    download.file(url, destfile = zip_path, mode = "wb")
+  }
+
+  # 3. Unzip the contents into dir_path
+  unzip(zip_path, exdir = dir_path)
+
+  # 4. Read the .shp file with sf::st_read
+  shp_file <- list.files(
+    dir_path,
+    pattern = "\\.shp$",
+    full.names = TRUE,
+    recursive = TRUE
+  )
+
+  if (length(shp_file) == 0) {
+    stop("No .shp file found in ", dir_path)
+  }
+
+  nyc_raw <- sf::st_read(shp_file[1], quiet = TRUE)
+
+  # 5. Transform to WGS 84
+  nyc_wgs84 <- sf::st_transform(nyc_raw, crs = "WGS84")
+
+  # 6. Return the transformed data
+  return(nyc_wgs84)
+}
+
+
+cds <- NYC_CDs()
+
+
+
+plot(sf::st_geometry(cds))
+
+
+```
+### Tree Points
+```{r}
+NYC_TreePoints <- function(dir_path    = "data/mp03",
+                           limit       = 5000,
+                           max_records = Inf) {
+  # library(sf); library(dplyr); library(httr2) must be loaded before calling
+
+  if (!dir.exists(dir_path)) {
+    dir.create(dir_path, recursive = TRUE)
+  }
+
+  base_url <- "https://data.cityofnewyork.us/resource/hn5i-inap.geojson"
+
+  offset       <- 0L
+  chunk_index  <- 1L
+  total_rows   <- 0L
+
+  repeat {
+    message("Chunk ", chunk_index,
+            " | offset = ", offset,
+            " | total_rows = ", total_rows)
+
+    file_path <- file.path(
+      dir_path,
+      sprintf("treepoints_%05d.geojson", chunk_index)
+    )
+
+    # download this batch only if file doesn't already exist
+    if (!file.exists(file_path)) {
+      req <- request(base_url) |>
+        req_url_query(
+          `$limit`  = limit,
+          `$offset` = offset
+        )
+
+      resp <- req_perform(req)
+      geojson_text <- resp_body_string(resp)
+      writeLines(geojson_text, file_path)
+    }
+
+    sf_chunk <- sf::st_read(file_path, quiet = TRUE)
+
+    if (nrow(sf_chunk) == 0) {
+      message("No rows returned; stopping.")
+      break
+    }
+
+    total_rows <- total_rows + nrow(sf_chunk)
+
+    if (nrow(sf_chunk) < limit) {
+      message("Last (partial) batch from API; stopping.")
+      break
+    }
+
+    if (total_rows >= max_records) {
+      message("Reached max_records = ", max_records, "; stopping early.")
+      break
+    }
+
+    offset      <- offset + limit
+    chunk_index <- chunk_index + 1L
+  }
+
+  # 8) Read all GeoJSON data files using st_read
+  geojson_files <- list.files(
+    dir_path,
+    pattern = "^treepoints_.*\\.geojson$",
+    full.names = TRUE
+  )
+
+  if (length(geojson_files) == 0) {
+    stop("No GeoJSON files found in ", dir_path)
+  }
+
+  chunks <- lapply(geojson_files, function(f) {
+    sf::st_read(f, quiet = TRUE)
+  })
+
+  # Separate attributes and geometry
+  data_list <- lapply(chunks, sf::st_drop_geometry)
+  geom_list <- lapply(chunks, sf::st_geometry)
+  crs_obj   <- sf::st_crs(chunks[[1]])
+
+  # Harmonize columns and types for bind_rows
+  all_cols <- unique(unlist(lapply(data_list, names)))
+  data_list <- lapply(data_list, function(df) {
+    missing <- setdiff(all_cols, names(df))
+    for (m in missing) df[[m]] <- NA_character_
+    df <- df[, all_cols, drop = FALSE]
+    df[] <- lapply(df, as.character)
+    df
+  })
+
+  # Combine all data sets using bind_rows
+  trees_all_df <- dplyr::bind_rows(data_list)
+
+  # Combine geometry and rebuild sf
+  geom_all <- do.call(c, geom_list)
+  trees_all <- sf::st_as_sf(
+    trees_all_df,
+    geometry = geom_all,
+    crs      = crs_obj
+  )
+
+  return(trees_all)
+}
+
+# <- function ends here. NOW you can call it:
+
+trees_full<- NYC_TreePoints(limit = 5000, max_records = Inf)
+
+ 
+
+
+```
+
+### Map of Trees in All Districts 
+```{r, fig.width=8, fig.height=8}
+library(sf)
+library(dplyr)
+library(ggplot2)
+
+# Make sure trees have lon/lat extracted
+trees_pts <- trees_full |>
+  mutate(
+    lon = st_coordinates(geometry)[, 1],
+    lat = st_coordinates(geometry)[, 2]
+  )
+
+# Bounding box for the districts
+bb <- st_bbox(cds)
+
+ggplot() +
+  
+  # 1) Council district outlines
+  geom_sf(
+    data       = cds,
+    fill       = NA,
+    color      = "grey20",
+    linewidth  = 0.4
+  ) +
+  
+  # 2) All tree points in green
+  geom_point(
+    data  = trees_pts,
+    aes(x = lon, y = lat),
+    color = "#2ca25f",     # green
+    alpha = 0.35,
+    size  = 0.2
+  ) +
+  
+  coord_sf(
+    crs  = 4326,
+    xlim = c(bb["xmin"], bb["xmax"]),
+    ylim = c(bb["ymin"], bb["ymax"]),
+    expand = FALSE
+  ) +
+  
+  labs(
+    title    = "NYC Tree Locations",
+    subtitle = "All recorded tree points plotted in green",
+    x        = "Longitude",
+    y        = "Latitude",
+    caption  = "Data: NYC OpenData Forestry Tree Points (hn5i-inap) & NYC Council Districts"
+  ) +
+  
+  theme_minimal() +
+  theme(
+    plot.background   = element_rect(fill = "white", color = NA),
+    panel.background  = element_rect(fill = "white", color = NA),
+    panel.grid        = element_line(color = "grey90"),
+    axis.text         = element_text(color = "grey20"),
+    axis.title        = element_text(color = "grey10"),
+    legend.position   = "none",
+    plot.title        = element_text(size = 18, face = "bold"),
+    plot.subtitle     = element_text(size = 12)
+  )
+
+ 
+
+```
+## District Level Analysis of Trees
+### Which council district has the most trees?
+```{r}
+library(sf)
+library(dplyr)
+
+# 1. Align CRS for cds and trees_full
+if (!is.na(st_crs(cds)) && !is.na(st_crs(trees_full))) {
+  if (st_crs(trees_full) != st_crs(cds)) {
+    trees_full <- st_transform(trees_full, st_crs(cds))
+  }
+} else {
+  cds        <- st_transform(cds, 4326)
+  trees_full <- st_transform(trees_full, 4326)
+}
+
+# 2. Use the REAL council district column from cds
+#    Replace "CounDist" with the actual name if it's different.
+cds_for_join <- cds |>
+  rename(council_dist = CounDist) |>
+  select(council_dist, geometry)
+
+# 3. Spatial join: every tree gets a council_dist
+trees_with_district <- st_join(
+  trees_full,
+  cds_for_join,
+  join = st_intersects,
+  left = TRUE
+)
+
+
+
+
+```
+
+
+
+### Which Council District has the most Trees
+
+```{r}
+library(dplyr)
+library(sf)
+library(DT)
+
+# 1) Count trees per council district
+trees_by_district <- trees_with_district |>
+  st_drop_geometry() |>
+  count(council_dist, name = "tree_count")
+
+# 2) Take top 10 by tree count
+top10_cd <- trees_by_district |>
+  arrange(desc(tree_count)) |>
+  slice_head(n = 10)
+
+# 3) Build datatable: district number + tree count
+result <- top10_cd |>
+  transmute(
+    `Council District Number` = council_dist,
+    `Tree Count`              = tree_count
+  ) |>
+  datatable(
+    rownames = FALSE,
+    class    = "compact",
+    options  = list(
+      dom      = "t",
+      paging   = FALSE,
+      ordering = FALSE,
+      info     = FALSE
+    )
+  )
+
+result
+
+
+
+```
+
+Council District 51 has the most Trees with 70,965 trees.
+
+### Which council district has the highest density of trees?
+```{r}
+library(dplyr)
+library(sf)
+library(DT)
+
+# 1. Count trees per council district
+trees_by_district <- trees_with_district |>
+  st_drop_geometry() |>
+  filter(!is.na(council_dist)) |>
+  count(council_dist, name = "tree_count")
+
+# 2. Join counts back onto districts
+cds_density <- cds |>
+  rename(
+    council_dist = CounDist,
+    total_area    = Shape_Area
+  ) |>
+  left_join(trees_by_district, by = "council_dist") |>
+  mutate(
+    tree_density = tree_count / total_area   # NO conversions
+  )
+
+# 3. Sort and output the densest district
+cds_density_sorted <- cds_density |>
+  arrange(desc(tree_density)) |>
+  st_drop_geometry()
+
+result <- datatable(
+  cds_density_sorted |>
+    select(council_dist, tree_count, total_area, tree_density) |>
+    slice_head(n = 1),
+  rownames = FALSE,
+  class    = "compact",
+  options  = list(
+    dom = 't',
+    paging = FALSE,
+    ordering = FALSE,
+    info = FALSE,
+    columnDefs = list(
+      list(className = "dt-center", targets = "_all")
+    )
+  )
+)
+
+result
+
+
+
+```
+
+Council District 7 has the highest density of trees.
+
+### Plot of Density in District 7
+
+```{r, fig.width=8, fig.height=8}
+library(sf)
+library(dplyr)
+library(ggplot2)
+library(MASS)    # kde2d
+library(scales)  # rescale
+
+# 1) Trees in Council District 7
+trees_cd7 <- trees_with_district |>
+  filter(council_dist == 7)
+
+coords_cd7 <- st_coordinates(trees_cd7)
+lon <- coords_cd7[, 1]
+lat <- coords_cd7[, 2]
+
+# 2) KDE on lon/lat
+dens <- MASS::kde2d(
+  x = lon,
+  y = lat,
+  n = 150   # smaller = faster; increase later if you want smoother
+)
+
+# Turn KDE grid into a data.frame of points
+grid_df <- expand.grid(
+  lon = dens$x,
+  lat = dens$y
+)
+grid_df$density <- as.vector(dens$z)
+
+# Convert to sf points
+density_pts <- st_as_sf(
+  grid_df,
+  coords = c("lon", "lat"),
+  crs = st_crs(trees_cd7)
+)
+
+# 3) Keep only density points inside District 7
+cd7_poly <- cds |> filter(CounDist == 7)
+
+inside <- st_within(density_pts, cd7_poly, sparse = FALSE)[, 1]
+density_cd7 <- density_pts[inside, ]
+
+# Pull back lon/lat for ggplot
+density_cd7_df <- density_cd7 |>
+  mutate(
+    lon = st_coordinates(geometry)[, 1],
+    lat = st_coordinates(geometry)[, 2]
+  ) |>
+  st_drop_geometry()
+
+# Normalize density 0–1
+density_cd7_df$density_norm <- scales::rescale(density_cd7_df$density)
+
+# 4) Zoom box around District 7
+bbox <- st_bbox(cd7_poly)
+x_range <- bbox$xmax - bbox$xmin
+y_range <- bbox$ymax - bbox$ymin   # <-- this was the bug
+
+x_lim <- c(bbox$xmin - 0.1 * x_range,
+           bbox$xmax + 0.1 * x_range)
+y_lim <- c(bbox$ymin - 0.1 * y_range,
+           bbox$ymax + 0.1 * y_range)
+
+# 5) Plot
+ggplot() +
+  # NYC council districts background
+  geom_sf(data = cds, fill = "grey95", color = "grey80") +
+
+  # density tiles only where points are inside CD 7
+  geom_raster(
+    data = density_cd7_df,
+    aes(x = lon, y = lat, fill = density_norm),
+    interpolate = TRUE
+  ) +
+
+  # outline for District 7
+  geom_sf(
+    data = cd7_poly,
+    fill = NA,
+    color = "black",
+    linewidth = 1
+  ) +
+
+  scale_fill_gradientn(
+    colours = c(
+      "#2d004b",
+      "#54278f",
+      "#756bb1",
+      "#f768a1",
+      "#fe9929",
+      "#ffff99"
+    ),
+    name = "Tree density\n(relative)"
+  ) +
+
+  coord_sf(xlim = x_lim, ylim = y_lim, expand = FALSE) +
+  labs(
+    title    = "Tree Density in NYC Council District 7",
+    subtitle = "Zoomed-in heatmap, masked to district boundary",
+    x        = "Longitude",
+    y        = "Latitude"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background  = element_rect(fill = "white", color = NA),
+    legend.position  = "right"
+  )
+
+```
+
+This map shows the relative density of trees in district 7. We can see that there are clear hotspots throughout district 7. We can assume these hotspots contribute to the overall density of district 7.
+
+
+### Which district has highest fraction of dead trees out of all trees?
+
+```{r}
+library(dplyr)
+library(DT)
+library(sf)
+
+# 1) Drop geometry to work with plain columns
+trees_df <- trees_with_district |> st_drop_geometry()
+
+# 2) Normalize condition text (just in case)
+trees_df <- trees_df |>
+  mutate(tpcondition = toupper(tpcondition))
+
+# 3) Count alive vs dead per council district
+dead_stats <- trees_df |>
+  group_by(council_dist) |>
+  summarise(
+    total_trees = n(),
+    dead_trees  = sum(tpcondition %in% c("DEAD", "STUMP", "REMOVED"), na.rm = TRUE),
+    dead_fraction = dead_trees / total_trees
+  ) |>
+  arrange(desc(dead_fraction))
+
+# 4) Display as datatable (top district only)
+result <- dead_stats |>
+  slice_head(n = 1) |>
+  datatable(
+    rownames = FALSE,
+    class = "compact",
+    options = list(
+      dom = "t",
+      paging = FALSE,
+      ordering = FALSE,
+      info = FALSE
+    )
+  )
+
+result
+
+
+```
+District 32 has the highest fraction of dead trees at aproximately 14.255%.
+
+### Map of Dead Trees in District 32 
+
+```{r, fig.width=8, fig.height=8}
+library(dplyr)
+library(sf)
+library(ggplot2)
+library(scales)
+
+# 1. Dead trees in District 32
+dead32 <- trees_with_district |>
+  filter(
+    council_dist == 32,
+    toupper(tpcondition) %in% c("DEAD", "STUMP", "REMOVED")
+  )
+
+n_dead <- nrow(dead32)
+
+# 2. District 32 polygon
+cd32_poly <- cds |> filter(CounDist == 32)
+
+# 3. Zoom window with padding
+bbox32   <- st_bbox(cd32_poly)
+x_pad    <- (bbox32$xmax - bbox32$xmin) * 0.08
+y_pad    <- (bbox32$ymax - bbox32$ymin) * 0.08
+
+x_min <- bbox32$xmin - x_pad
+x_max <- bbox32$xmax + x_pad
+y_min <- bbox32$ymin - y_pad
+y_max <- bbox32$ymax + y_pad
+
+# 4. Cleaner plot
+ggplot() +
+  # all districts for context, very light
+  geom_sf(data = cds, fill = "grey95", color = "grey85", linewidth = 0.3) +
+  
+  # District 32 highlighted
+  geom_sf(data = cd32_poly, fill = "grey98", color = "black", linewidth = 1) +
+  
+  # dead trees in 32
+  geom_sf(
+    data = dead32,
+    color = "#e63946",
+    alpha = 0.6,
+    size  = 0.7
+  ) +
+  
+  coord_sf(
+    xlim = c(x_min, x_max),
+    ylim = c(y_min, y_max),
+    expand = FALSE
+  ) +
+  
+  labs(
+    title    = "Dead Trees in NYC Council District 32",
+    subtitle = paste("Zoomed map of", comma(n_dead), "dead / stump / removed trees"),
+    x        = "Longitude",
+    y        = "Latitude"
+  ) +
+  
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.background  = element_rect(fill = "white", color = NA),
+    panel.grid.major = element_line(color = "grey90", linewidth = 0.2),
+    panel.grid.minor = element_blank(),
+    plot.title       = element_text(face = "bold", size = 16),
+    plot.subtitle    = element_text(size = 11),
+    axis.title       = element_text(size = 11),
+    axis.text        = element_text(size = 9),
+    axis.text.x      = element_text(angle = 45, hjust = 1)
+  )
+
+```
+
+Our map of District 32 plots the dead trees throughout the district. 
+
+
+### What is the most common tree species in Manhattan?
+```{r}
+library(dplyr)
+library(sf)
+library(DT)
+
+# Manhattan trees (CD 1–10), drop geometry
+manhattan_trees <- trees_with_district |>
+  filter(council_dist %in% 1:10) |>
+  st_drop_geometry()
+
+# Extract common name and count
+species_counts_common <- manhattan_trees |>
+  mutate(
+    common_name = sub("^.* -\\s*", "", genusspecies)
+  ) |>
+  count(common_name, sort = TRUE, name = "tree_count")
+
+# Show top 5 as datatable
+result <- species_counts_common |>
+  slice_head(n = 5) |>
+  datatable(
+    rownames = FALSE,
+    class = "compact",
+    options = list(
+      dom = "t",
+      paging = FALSE,
+      ordering = TRUE,
+      info = FALSE
+    )
+  )
+
+result
+
+
+```
+The Thornlesss Honeylocust is the most common tree in Manhattan, with 17,310 trees within the city.
+
+### Top Five Trees in Manhattan Map
+
+```{r,fig.width=8, fig.height=8}
+library(sf)
+library(dplyr)
+library(leaflet)
+
+# 0) Make sure we’re in WGS84 for leaflet
+trees_wgs <- st_transform(trees_with_district, 4326)
+cds_wgs   <- st_transform(cds, 4326)
+
+# 1) Define Manhattan as council districts 1–10
+manhattan_sf <- trees_wgs |>
+  filter(council_dist %in% 1:10) |>
+  mutate(
+    # Pull out common name after the " - "
+    common_name = sub("^.*-\\s*", "", genusspecies)
+  )
+
+# 2) Find top 5 most common species in Manhattan
+top5_species <- manhattan_sf |>
+  st_drop_geometry() |>
+  count(common_name, sort = TRUE) |>
+  slice_head(n = 5) |>
+  pull(common_name)
+
+# 3) Keep only those trees
+mt5_wgs <- manhattan_sf |>
+  filter(common_name %in% top5_species)
+
+# 4) Color palette for the 5 species
+pal <- colorFactor(
+  palette = "Set2",
+  domain  = sort(unique(mt5_wgs$common_name))
+)
+
+# 5) Leaflet map – back to simple fixed-size circle markers
+leaflet() |>
+  addProviderTiles(providers$CartoDB.Positron) |>
+
+  # NYC council districts for context
+  addPolygons(
+    data   = cds_wgs,
+    weight = 1,
+    color  = "grey40",
+    fill   = FALSE
+  ) |>
+
+  # Top-5 Manhattan trees as colored points
+  addCircleMarkers(
+    data        = mt5_wgs,
+    radius      = 3,                  # fixed pixel radius
+    stroke      = FALSE,
+    fillOpacity = 0.7,
+    color       = ~pal(common_name),
+    popup       = ~paste0(
+      "Species: ", common_name, "<br>",
+      "Council district: ", council_dist
+    )
+  ) |>
+
+  addLegend(
+    position = "bottomright",
+    pal      = pal,
+    values   = mt5_wgs$common_name,
+    title    = "Top 5 species"
+  ) |>
+
+  # Center roughly on Manhattan
+  setView(lng = -73.97, lat = 40.78, zoom = 12)
+
+```
+I've plotted the top 5 trees in Manhattan for reference. Note that the Honeylocust is plotted in green.
+
+
+### Closest Tree to Baruch College
+
+```{r}
+library(dplyr)
+library(sf)
+library(DT)
+
+# 1. Helper to make a WGS84 point
+new_st_point <- function(lat, lon) {
+  sf::st_sfc(sf::st_point(c(lon, lat)), crs = "WGS84")
+}
+
+# 2. Baruch College point
+baruch_point <- new_st_point(
+  lat = 40.7403,
+  lon = -73.9831
+)
+
+# 3. Distance (in meters) from every tree to Baruch
+trees_with_distance <- trees_with_district |>
+  dplyr::mutate(
+    distance_m = as.numeric(sf::st_distance(geometry, baruch_point))
+  )
+
+# 4. Closest tree: one row, common name + distance
+closest_tree <- trees_with_distance |>
+  dplyr::slice_min(distance_m, n = 1) |>
+  sf::st_drop_geometry() |>
+  dplyr::mutate(
+    common_name = sub(".* - ", "", genusspecies)  # keep only part after " - "
+  ) |>
+  dplyr::select(common_name, distance_m)
+
+# 5. Single-row datatable
+DT::datatable(
+  closest_tree,
+  rownames = FALSE,
+  class    = "compact",
+  options  = list(
+    dom      = "t",
+    paging   = FALSE,
+    ordering = FALSE,
+    info     = FALSE
+  )
+)
+
+
+
+```
+
+The closest tree to Baruch College is the Callery Pear, at 15.49 meters away.
+
+### Callery Pear Trees around Baruch College
+```{r}
+
+
+library(dplyr)
+library(sf)
+library(leaflet)
+
+# Callery pear color to match previous map
+CALLERY_PEAR_COLOR <- "#66C2A5" 
+
+# Baruch College coordinates
+baruch_point <- sf::st_sfc(sf::st_point(c(-73.9831, 40.7403)), crs = 4326) # WGS84
+
+# Defining radius 
+radius_m <- 500 
+
+
+
+# Map Style icon
+baruch_icon <- makeAwesomeIcon(
+  icon = "fa-university",     
+  library = "fa",
+  markerColor = "red",       
+  iconColor = "white"        
+)
+
+
+callery_pear_nearby <- trees_with_district |>
+  # Calculate distance (in meters) from every tree to Baruch
+  dplyr::mutate(
+    distance_m = as.numeric(sf::st_distance(geometry, baruch_point))
+  ) |>
+  # Filter for Callery Pears
+  dplyr::filter(grepl("Callery pear", genusspecies, ignore.case = TRUE)) |>
+  # 📍 Filter for trees within the specified radius
+  dplyr::filter(distance_m <= radius_m)
+
+
+
+
+callery_pear_nearby_wgs84 <- sf::st_transform(callery_pear_nearby, crs = 4326)
+
+# Create a leaflet map
+leaflet() |>
+  addProviderTiles(providers$CartoDB.Positron) |>
+  
+  # Add markers for the Callery Pear trees (still using Circle Markers for consistency)
+  addCircleMarkers(
+    data = callery_pear_nearby_wgs84,
+    radius = 4,
+    color = CALLERY_PEAR_COLOR,
+    stroke = FALSE,
+    fillOpacity = 0.8,
+    popup = ~paste(
+      "Species: ", genusspecies, "<br>",
+      "Distance: ", round(distance_m, 1), " m"
+    )
+  ) |>
+  
+  # Add the Baruch College marker using addAwesomeMarkers() for the custom icon and hover label
+  addAwesomeMarkers(
+    lng = sf::st_coordinates(baruch_point)[, 1],
+    lat = sf::st_coordinates(baruch_point)[, 2],
+    icon = baruch_icon,               # Use the custom pin icon
+    label = "Baruch College",         # The text that appears on hover 
+    popup = "Baruch College (NYC)",   # The text that appears on click
+    layerId = "Baruch College"
+  ) |>
+  
+  # Add a circle to visualize the search radius
+  addCircles(
+    lng = sf::st_coordinates(baruch_point)[, 1],
+    lat = sf::st_coordinates(baruch_point)[, 2],
+    weight = 1,
+    radius = radius_m,
+    color = "blue",
+    fillOpacity = 0.1
+  ) |>
+  
+  # Set view to the area around Baruch College
+  setView(lng = -73.9831, lat = 40.7403, zoom = 15)
+```
+This interactive map shows all the Callery Pear trees within a 500 meter radius of Baruch. If we zoom in, we can actually find the closest tree to Baruch's coordinates.
+
+### Callery Pear Tree
+
+![](callery_pear.png)
+
+
+## Downloading NYC Parks & Recreation Data Sets 
+
+```{r}
+library(httr2)
+library(readr)
+library(dplyr)
+
+download_socrata_csv <- function(resource_id,
+                                 prefix,
+                                 dir_path    = "data/mp03",
+                                 limit       = 50000,
+                                 max_records = Inf) {
+  # Ensure directory exists
+  if (!dir.exists(dir_path)) {
+    dir.create(dir_path, recursive = TRUE)
+  }
+
+  base_url <- paste0("https://data.cityofnewyork.us/resource/", resource_id, ".csv")
+
+  offset      <- 0L
+  batch_index <- 1L
+  total_rows  <- 0L
+  chunks      <- list()
+
+  repeat {
+    message("Batch ", batch_index,
+            " | offset = ", offset,
+            " | total_rows = ", total_rows)
+
+    file_path <- file.path(
+      dir_path,
+      sprintf("%s_%05d.csv", prefix, batch_index)
+    )
+
+    # Only hit the API if the file isn't already saved
+    if (!file.exists(file_path)) {
+      req <- request(base_url) |>
+        req_url_query(
+          `$limit`  = limit,
+          `$offset` = offset
+        )
+
+      resp <- req_perform(req)
+      csv_text <- resp_body_string(resp)
+      writeLines(csv_text, file_path)
+    }
+
+    
+    batch_df <- readr::read_csv(
+      file_path,
+      col_types      = cols(.default = col_character()),
+      show_col_types = FALSE,
+      progress       = FALSE
+    )
+
+    if (nrow(batch_df) == 0) {
+      message("No rows returned; stopping.")
+      break
+    }
+
+    chunks[[batch_index]] <- batch_df
+    total_rows <- total_rows + nrow(batch_df)
+
+    if (nrow(batch_df) < limit) {
+      message("Last (partial) batch from API; stopping.")
+      break
+    }
+
+    if (total_rows >= max_records) {
+      message("Reached max_records = ", max_records, "; stopping early.")
+      break
+    }
+
+    offset      <- offset + limit
+    batch_index <- batch_index + 1L
+  }
+
+  if (length(chunks) == 0) {
+    stop("No data downloaded or loaded for resource_id = ", resource_id)
+  }
+
+  dplyr::bind_rows(chunks)
+}
+
+
+
+parks_risk <- download_socrata_csv(
+  resource_id = "259a-b6s7",
+  prefix      = "parks_risk",
+  dir_path    = "data/mp03",
+  limit       = 50000,
+  max_records = Inf
+)
+
+parks_work <- download_socrata_csv(
+  resource_id = "bdjm-n7q4",
+  prefix      = "parks_work",
+  dir_path    = "data/mp03",
+  limit       = 50000,
+  max_records = Inf
+)
+
+
+
+```
+
+With these new data sets from NYC's Parks and Recreation we can find out information about work orders, and the overall safety of trees across our council districts.
+
+## Task Policy
+District 6 Tree Safety & Fall Festival Initiative
+
+District 6 is home to some of Manhattan's most neighborhoods and features, representing Hell's Kitchen, The Upper west Side and Central Park it is the perfect district to host a fall festival. Our Fall Festival Initiative aims to promote appreciation of NYC's trees and bring awareness to the overall need for tree maintenance and safety of our trees. While our festival will be celebrating fall colors, we will also be honoring the work done by NYC's Parks and Recreation Department.
+
+
+![](Fallcolors.png)
+
+The Top 5 trees in, shown in the image above and the table below, are The Honeylocust, Pin Oak, London Planetree, Maidenhair, and American elm. These trees produce iconic fall colors and we will be highlighting these trees during our festival, but all of trees in District 6 will be appreciated.
+
+
+### Data Table for Top Trees in District 6 
+```{r}
+library(dplyr)
+library(stringr)
+library(sf)
+library(DT)
+library(purrr)
+
+# 1. Keep only living Manhattan trees, drop geometry
+living_manhattan <- manhattan_trees |>
+  filter(!str_detect(tpcondition, "(?i)dead|stump")) |>
+  st_drop_geometry()
+
+# 2. Split data by council district (Manhattan has multiple)
+manhattan_split <- living_manhattan |>
+  group_split(council_dist)
+
+# 3. Create a named vector for indexing (district numbers)
+manhattan_districts <- living_manhattan |>
+  distinct(council_dist) |>
+  pull()
+
+# 4. For each district: take top 10 species & make a datatable
+top10_tables <- map2(
+  manhattan_split,
+  manhattan_districts,
+  ~ {
+    .x |>
+      count(genusspecies, sort = TRUE) |>
+      slice_head(n = 10) |>
+      datatable(
+        colnames = c("Species (genusspecies)", "Count"),
+        caption = paste("Top 10 Species — Manhattan Council District", .y),
+        options = list(dom = "t", paging = FALSE)
+      )
+  }
+)
+
+# 5. Output: a list of datatables, one for each Manhattan district
+top10_tables
+
+
+```
+
+The following chart and map highlight the prevalence of these trees in District 6.
+
+### Chart of Fall Color Trees in District 6
+```{r}
+library(dplyr)
+library(sf)
+library(ggplot2)
+library(stringr)
+
+# 1. Filter to District 6 and get top 5 species
+top5_cd6 <- trees_with_district |>
+  st_drop_geometry() |>
+  filter(as.integer(council_dist) == 6) |>
+  count(genusspecies, name = "count", sort = TRUE) |>
+  slice_head(n = 5) |>
+  mutate(
+    # extract common name after the dash
+    common_name = str_trim(str_extract(genusspecies, "(?<=- ).*"))
+  )
+
+# 2. Vertical color-coded bar chart with legend of common names
+ggplot(top5_cd6, aes(x = reorder(common_name, count), y = count, fill = common_name)) +
+  geom_col() +
+  labs(
+    title = "Top 5 Tree Species in Manhattan District 6",
+    x = "Common Name",
+    y = "Number of Trees",
+    fill = "Species (Common Name)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "right",
+    axis.text.x = element_text(angle = 20, hjust = 1)
+  )
+
+
+```
+
+### Map of Fall Color Trees in District 6
+```{r}
+library(sf)
+library(dplyr)
+library(leaflet)
+
+# 0) WGS84 for leaflet ---------------------------------------------------
+trees_wgs <- st_transform(trees_with_district, 4326)
+cds_wgs   <- st_transform(cds, 4326)
+
+# 1) District 6 only, with common name -----------------------------------
+cd6_trees <- trees_wgs |>
+  filter(as.integer(council_dist) == 6) |>
+  mutate(
+    # Pull out common name after the " - "
+    common_name = sub("^.*-\\s*", "", genusspecies)
+  )
+
+# 2) Top 5 most common species in District 6 -----------------------------
+top5_species_cd6 <- cd6_trees |>
+  st_drop_geometry() |>
+  count(common_name, sort = TRUE, name = "count") |>
+  slice_head(n = 5) |>
+  pull(common_name)
+
+# 3) Keep only trees from those 5 species --------------------------------
+cd6_top5 <- cd6_trees |>
+  filter(common_name %in% top5_species_cd6)
+
+# 4) Color palette for the 5 species (unnamed domain to avoid jsonlite noise)
+pal <- colorFactor(
+  palette = "Set2",
+  domain  = unname(sort(unique(cd6_top5$common_name)))
+)
+
+# 5) Leaflet map ---------------------------------------------------------
+leaflet() |>
+  addProviderTiles(providers$CartoDB.Positron) |>
+
+  # NYC council districts for context
+  addPolygons(
+    data   = cds_wgs,
+    weight = 1,
+    color  = "grey40",
+    fill   = FALSE
+  ) |>
+
+  # Top-5 District 6 trees as colored points
+  addCircleMarkers(
+    data        = cd6_top5,
+    radius      = 3,
+    stroke      = FALSE,
+    fillOpacity = 0.7,
+    color       = ~pal(common_name),
+    popup       = ~paste0(
+      "Species: ", common_name, "<br>",
+      "Council district: ", council_dist
+    )
+  ) |>
+
+  # IMPORTANT: give addLegend() explicit data so the formula has context
+  addLegend(
+    position = "bottomright",
+    pal      = pal,
+    data     = cd6_top5,
+    values   = ~common_name,
+    title    = "Top 5 species (CD 6)"
+  ) |>
+
+  # Center around District 6
+  setView(lng = -73.98, lat = 40.78, zoom = 13)
+
+
+
+```
+
+In preparation for our Fall Festival, we analyzed the overall risk of these trees. This bring us to the next part of our proposal: why District 6? District 6 has the highest number of high risk trees in Manhattan at 2,967. Out of all the records from the Parks and Recreation department, 24% involved high risk trees. With 5,481 open work orders, District 6 is in desperate need of maintenance.
+
+### Work Orders and High Risk Trees from NYC Parks Data Sets
+```{r}
+library(dplyr)
+library(stringr)
+library(sf)
+library(DT)
+
+## 1. WORK ORDERS: Manhattan only, summarized by council district ----
+
+wo_manh <- parks_work |>
+  st_drop_geometry() |>
+  as.data.frame() |>
+  filter(boroughcode == "Manhattan",
+         !is.na(citycouncil))
+
+# make district a clean integer
+wo_manh <- wo_manh |>
+  mutate(council_dist = as.integer(round(as.numeric(citycouncil))))
+
+maintenance_keywords <- "(?i)prune|remove|hazard|branch|stump|clean|risk"
+
+work_summary <- wo_manh |>
+  group_by(council_dist) |>
+  summarize(
+    total_work_orders    = n(),
+    open_work_orders     = sum(str_detect(wostatus, "(?i)open"), na.rm = TRUE),
+    maint_related_orders = sum(str_detect(wocategory, maintenance_keywords), na.rm = TRUE),
+    .groups = "drop"
+  )
+
+## 2. RISK: join to work orders via inspectionglobalid, then summarize ----
+
+# unique mapping from inspection -> district (Manhattan only)
+inspect_to_dist <- wo_manh |>
+  distinct(inspectionglobalid, council_dist) |>
+  filter(!is.na(inspectionglobalid))
+
+risk_join <- parks_risk |>
+  st_drop_geometry() |>
+  as.data.frame() |>
+  left_join(inspect_to_dist, by = "inspectionglobalid") |>
+  filter(!is.na(council_dist))
+
+# riskrating is coded as numbers in strings; convert to numeric
+risk_join <- risk_join |>
+  mutate(riskrating_num = suppressWarnings(as.numeric(riskrating)))
+
+# choose a threshold for “elevated risk”; here ≥8 is treated as higher risk
+risk_summary <- risk_join |>
+  group_by(council_dist) |>
+  summarize(
+    total_risk_records = n(),
+    elevated_risk      = sum(riskrating_num >= 8, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  mutate(
+    pct_elevated = round(100 * elevated_risk / total_risk_records, 1)
+  )
+
+## 3. COMBINE work-order + risk summaries into one table ----
+
+full_summary <- work_summary |>
+  full_join(risk_summary, by = "council_dist") |>
+  arrange(council_dist)
+
+# replace NAs with 0 where appropriate
+full_summary <- full_summary |>
+  mutate(
+    total_work_orders    = replace_na(total_work_orders, 0L),
+    open_work_orders     = replace_na(open_work_orders, 0L),
+    maint_related_orders = replace_na(maint_related_orders, 0L),
+    total_risk_records   = replace_na(total_risk_records, 0L),
+    elevated_risk        = replace_na(elevated_risk, 0L),
+    pct_elevated         = replace_na(pct_elevated, 0)
+  )
+
+## 4. Show combined table ----
+
+result <- datatable(
+  full_summary,
+  colnames = c(
+    "Council District",
+    "Total Work Orders",
+    "Open Work Orders",
+    "Maintenance-Related Orders",
+    "Total Risk Records (Inspections)",
+    "High-Risk Score Trees (rating ≥ 8)",
+    "% High-Risk Score Trees"
+  ),
+  caption = "Manhattan Tree Work Orders and Risk Assessments by Council District",
+  options = list(dom = "t", paging = FALSE)
+)
+
+result
+
+
+```
+
+The following chart shows that district 6 greatly exceeds district 7 and district 8, the two districts with the highest number of total trees, in terms of high risk trees.
+
+### Comparison of Risky Trees in District 6, 7 and 8
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# 1. Filter to districts 6, 7, and 8
+risk_compare <- full_summary |>
+  filter(council_dist %in% c(6, 7, 8))
+
+
+# 2. Bar chart: high-risk tree counts (not percent), all red
+ggplot(risk_compare,
+       aes(x = factor(council_dist),
+           y = elevated_risk)) +
+  geom_col(fill = "red") +
+  labs(
+    title = "High-Risk Trees (Risk ≥ 8): Districts 6, 7, and 8",
+    x = "Council District",
+    y = "Number of High-Risk Trees"
+  ) +
+  theme_minimal(base_size = 14)
+
+
+```
+
+
+### Interactive Map of High Risk Trees in District 6
+
+```{r}
+# 1. Convert geometry to lon/lat + drop geometry
+library(sf)
+library(dplyr)
+library(leaflet)
+
+# 1. District 6 trees with numeric riskrating ----------------------------
+trees_d6_high <- trees_with_district |>
+  mutate(riskrating_num = suppressWarnings(as.numeric(riskrating))) |>
+  filter(
+    as.integer(council_dist) == 6,        # District 6 only
+    !is.na(riskrating_num),
+    riskrating_num >= 8                   # high-risk
+  ) |>
+  st_transform(4326)
+
+# Quick sanity check in the console
+nrow(trees_d6_high)
+
+# 2. District 6 polygon (for outline) -----------------------------------
+cd6_poly <- cds |>
+  st_transform(4326) |>
+  filter(as.integer(CounDist) == 6)
+
+# 3. Leaflet map: District 6, high-risk trees in red --------------------
+leaflet() |>
+  addProviderTiles(providers$CartoDB.Positron) |>
+
+  # District 6 boundary
+  addPolygons(
+    data   = cd6_poly,
+    color  = "black",
+    weight = 2,
+    fill   = FALSE
+  ) |>
+
+  # High-risk trees
+  addCircleMarkers(
+    data        = trees_d6_high,
+    radius      = 4,
+    color       = "red",
+    fillOpacity = 0.8,
+    stroke      = FALSE,
+    popup       = ~paste0(
+      "<b>Risk rating:</b> ", riskrating_num, "<br>",
+      "<b>Condition:</b> ", tpcondition, "<br>",
+      "<b>Species:</b> ", genusspecies
+    )
+  ) |>
+
+  # Simple fixed view on District 6 (upper west / central park area)
+  setView(lng = -73.98, lat = 40.78, zoom = 13)
+
+```
+Our map highlights the locations of these high risk trees.
+
+### Mean Risk of Manhattan Trees 
+```{r}
+library(dplyr)
+library(sf)
+library(DT)
+library(stringr)
+library(tidyr)
+
+# 1. Start from trees_with_district and keep Manhattan (districts 1–10)
+trees_manh <- trees_with_district |>
+  st_drop_geometry() |>
+  mutate(
+    council_dist   = as.integer(council_dist),
+    tpcondition    = str_to_title(tpcondition),
+    riskrating_num = as.numeric(riskrating)
+  ) |>
+  filter(council_dist %in% 1:10)
+
+# 2. CONDITION summary by district
+condition_summary <- trees_manh |>
+  group_by(council_dist, tpcondition) |>
+  tally(name = "count") |>
+  pivot_wider(
+    names_from  = tpcondition,
+    values_from = count,
+    values_fill = 0
+  )
+
+# 3. RISK summary by district
+risk_summary <- trees_manh |>
+  group_by(council_dist) |>
+  summarize(
+    total_trees    = n(),
+    mean_risk      = round(mean(riskrating_num, na.rm = TRUE), 2),
+    elevated_risk  = sum(riskrating_num >= 8,  na.rm = TRUE),  # 8–12
+    very_high_risk = sum(riskrating_num >= 10, na.rm = TRUE),  # 10–12
+    pct_elevated   = round(100 * elevated_risk / total_trees, 1),
+    .groups = "drop"
+  )
+
+# 4. Combine CONDITION + RISK
+combined_summary <- risk_summary |>
+  left_join(condition_summary, by = "council_dist") |>
+  arrange(council_dist)
+
+# 5. Show result
+result <- datatable(
+  combined_summary,
+  caption = "Tree Condition and Risk Rating by Manhattan Council District",
+  options = list(dom = "t", paging = FALSE)
+)
+
+result
+
+
+```
+### Lolipop Chart for Mean Risk of Manhattan Trees
+
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Lollipop chart of mean risk, highlighting District 6
+risk_summary |>
+  mutate(
+    dist_factor = factor(council_dist),
+    is_6        = council_dist == 6
+  ) |>
+  ggplot(aes(x = mean_risk, y = dist_factor, color = is_6)) +
+  # stick ("lollipop" line)
+  geom_segment(aes(x = 0, xend = mean_risk, 
+                   y = dist_factor, yend = dist_factor),
+               linewidth = 1) +
+  # candy ("lollipop" point)
+  geom_point(size = 3) +
+  scale_color_manual(
+    values = c(`TRUE` = "red", `FALSE` = "grey60"),
+    labels = c(`TRUE` = "District 6", `FALSE` = "Other districts"),
+    name   = ""
+  ) +
+  labs(
+    title = "Average Tree Risk Score by Manhattan Council District",
+    x     = "Mean Risk Rating",
+    y     = "Council District"
+  ) +
+  theme_minimal(base_size = 14)
+
+```
+District 6 also exceeds the surrounding Manhattan districts in terms of mean risk as shown by this chart. With our upcoming fall festival, we suggest pruning 1000+ trees for dead and unstable limbs, removing approximately 50 trees with a risk greater than 10, conducting structural inspections on all remaining trees with moderate to high risk, and hosting a community planting event in the weeks before the festival. 
+
+### Manhattan Districts Tree Totals
+```{r}
+library(dplyr)
+library(DT)
+
+# Count total trees in each Manhattan district
+top3_total_trees <- trees_with_district |>
+  st_drop_geometry() |>
+  filter(as.integer(council_dist) %in% 1:10) |>   # Manhattan only
+  count(council_dist, name = "total_trees", sort = TRUE) |>
+  slice_head(n = 10)
+
+# Format as datatable
+result_top3_trees <- datatable(
+  top3_total_trees,
+  rownames = FALSE,
+  class = "compact",
+  options = list(dom = 't', paging = FALSE, ordering = TRUE, info = FALSE)
+)
+
+result_top3_trees
+
+
+```
+
+![](fallfestival.png)
+Conclusion:
+District 6 will benefit immensely from a Tree Safety & Fall Festival Initiative. Our initiative will not only promote the celebration of our district's trees and the important work of NYC's Parks and recreation department, but will also improve the overall safety of the highly trafficked streets. Our initiative will garner community support and appreciation for our trees and the employees of our city.
+
+
+

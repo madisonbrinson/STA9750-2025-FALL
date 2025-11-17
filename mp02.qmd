@@ -10,6 +10,11 @@ format:
     
     
 ---
+
+
+![](housing.png){width = 30%}
+
+
 # Introduction
 
 We are examining the relationship between housing growth and rent burden. Throughout this analysis we will look at the effect of income on  rent cost, income by state and industry, the effects of COVID 19 on employment in the healthcare industry, and population growth. In this analysis we will conduct a search for YIMBYs, or Yes In My Backyard cities. These cities allow for housing growth, account for population growth, and have lowered rent cost over our study period.
