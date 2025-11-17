@@ -1,5 +1,5 @@
 ---
-title: "Mini Project #03"
+title: "Mini Project #03: Visualizing and Maintaining the Green Canopy of NYC"
 format:
   html:
     code-fold: true
@@ -15,10 +15,15 @@ execute:
   echo: true   
 ---
 
-# NYC's Trees
+# Introduction: NYC Trees
+Our project focuses on an understanding of the understanding of the attributes associated with trees. For example, tree density, tree vitality and  tree population by species. Let's take a look at NYC's council districts to further our understanding the relationship between NYC's council districts and their population of trees.
+
+By the end of our project we will become New York arborists.
+
+
 
 ## Data Aquisition
-
+We download the data from the New York City Department of Planning to find our council district boundaries. The council district boundaries are given by the image below.
 
 ### NYC Districts Data Set
 
@@ -76,6 +81,8 @@ plot(sf::st_geometry(cds))
 
 
 ```
+Next we download the data for NYC Forestry Tree Points. *Note that this data does not include central park because Central Park is under separate management.* 
+
 ### Tree Points Data Set
 ```{r}
 NYC_TreePoints <- function(dir_path    = "data/mp03",
@@ -257,11 +264,16 @@ ggplot() +
  
 
 ```
+In this map we include all of the tree point within all of our community districts, NYC has a lot of trees. It's not possible to see each indicidual tree point in our plot.
+
 ## District Level Analysis of Trees
+Now we move to our exploratory analysis. We will explore New York City's trees on a more localized scale.
+
 ### Which council district has the most trees?
 ```{r}
 library(sf)
 library(dplyr)
+library(DT)
 
 # 1. Align CRS for cds and trees_full
 if (!is.na(st_crs(cds)) && !is.na(st_crs(trees_full))) {
@@ -286,21 +298,9 @@ trees_with_district <- st_join(
   join = st_intersects,
   left = TRUE
 )
-
-
-
-
 ```
 
-
-
-### Which Council District has the most Trees
-
 ```{r}
-library(dplyr)
-library(sf)
-library(DT)
-
 # 1) Count trees per council district
 trees_by_district <- trees_with_district |>
   st_drop_geometry() |>
@@ -329,10 +329,10 @@ result <- top10_cd |>
   )
 
 result
-
-
-
 ```
+
+
+
 
 **Council District 51** has the most Trees with **70,965** trees.
 
@@ -623,7 +623,7 @@ ggplot() +
 
 ```
 
-Our map of District 32 plots the dead trees throughout the district. 
+Our map of District 32 plots the dead trees throughout the district. Since this district is closer to the ocean, it makes sense that the soil may not be suitable to host the normal species in NYC.
 
 
 ### What is the most common tree species in Manhattan?
@@ -736,7 +736,8 @@ leaflet() |>
   setView(lng = -73.97, lat = 40.78, zoom = 12)
 
 ```
-I've plotted the top 5 trees in Manhattan for reference. Note that the Honeylocust is plotted in green.
+
+I've plotted the top 5 trees in Manhattan for reference. *Note that the Honeylocust is plotted in green.*
 
 
 ### Closest Tree to Baruch College
@@ -882,6 +883,7 @@ This interactive map shows all the Callery Pear trees within a 500 meter radius 
 
 
 ## Downloading NYC Parks & Recreation Data Sets 
+Again we are downloading 2 massive datasets, but we take the same approach as we did for the **Tree Points** data set. We recieve the data in chuncks. 
 
 ```{r}
 library(httr2)
