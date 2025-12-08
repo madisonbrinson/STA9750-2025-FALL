@@ -338,7 +338,7 @@ kable(
 
 ```
 
-
+The largest negative revision was in **June of 2021* at 672,000
 
 ```{r}
 library(ggplot2)
@@ -360,7 +360,7 @@ p_levels
 
 
 ```
-
+This plot shows the total employment level through the years. As expected, jobs numbers are increasing with a significant dip in 2020 which is also expected.
 ```{r}
 p_revisions <- ces_full |>
   ggplot(aes(x = date, y = revision)) +
@@ -379,6 +379,7 @@ p_revisions
 
 ```
 
+This plot shows the revisions over time with a significant spike around 2021. This can potentially be explained by the BLS "catching up" to the changes that COVID caused in 2020.
 
 ## Year with the largest jump in typical revision size (median |revision| vs previous year)
 ```{r}
@@ -416,6 +417,9 @@ kable(
 
 
 ```
+
+2022 had the largest increase in typical revision size.
+
 ## Largest election year spike
 ```{r}
 library(dplyr)
@@ -1808,6 +1812,8 @@ knitr::kable(
 
 
 ```
+
+
 Compared to previous decades two decades, the 2020's do seem to have an unusually high frequency of monthly revisions at **18.18%** but do not have the highest frequency of monthly revisions. However, this discrepancy can probably mostly be accounted for by the huge spike in 2021. 
 ```{r}
 library(ggplot2)
@@ -1827,6 +1833,8 @@ p_big_decade <- ggplot(big_rev_by_decade,
 
 p_big_decade
 ```
+
+
 
 Finally, we computed in Task 3, the most negative monthly revision in an election year.
 
@@ -1939,8 +1947,343 @@ ggplotly(p_dir)
 
 In our plot from Task 3, 2024 doesn't really seem to stand out much from previous election years.
 
+```{r}
+ces_period <- ces_full |>
+  mutate(
+    period = case_when(
+      date >= as.Date("2024-01-01") &
+      date <= as.Date("2025-06-01") ~ "Post-2024 election",
+      TRUE ~ "Historical baseline"
+    )
+  )
 
-## Claim 2: Stefanik (2024):
-“The Biden administration has been cooking the books — the jobs numbers keep getting revised down.” 
+claim1_period_summary <- ces_period |>
+  group_by(period) |>
+  summarise(
+    `Total revision (thousands)` = sum(revision, na.rm = TRUE),
+    `Mean monthly revision (thousands)` = mean(revision, na.rm = TRUE),
+    `Median monthly revision (thousands)` = median(revision, na.rm = TRUE),
+    `Fraction of downward revisions` = mean(revision < 0, na.rm = TRUE),
+    `Number of months` = n(),
+    .groups = "drop"
+  ) |>
+  mutate(
+    `Total revision (thousands)` =
+      round(`Total revision (thousands)`, 1),
+    `Mean monthly revision (thousands)` =
+      round(`Mean monthly revision (thousands)`, 1),
+    `Median monthly revision (thousands)` =
+      round(`Median monthly revision (thousands)`, 1),
+    `Fraction of downward revisions` =
+      paste0(round(`Fraction of downward revisions` * 100, 1), "%")
+  ) |>
+  as.data.frame()
+
+knitr::kable(
+  claim1_period_summary,
+  format  = "html",
+  caption = "Claim 1: Mean, Median, and Cumulative CES Revisions Post-Election vs Historical Baseline"
+)
+
+
+
+```
+
+We also computed revisions as a percent of the payroll, aka total jobs, in task 3. Using the levels, here we can see how tiny the revisions are compared to the total number of jobs. The yearly revisions are a very small fraction of total employment. So, there doesn't seem to be any evidence of significant "rigging" here.
+
+##Tests
+First we define a baseline for the post 
+```{r}
+claim1_period_summary <- ces_period |>
+  group_by(period) |>
+  summarise(
+    `Total revision (thousands)` = sum(revision, na.rm = TRUE),
+    `Average monthly revision (thousands)` = mean(revision, na.rm = TRUE),
+    `Fraction of downward revisions` = mean(revision < 0, na.rm = TRUE),
+    `Number of months` = n(),
+    .groups = "drop"
+  ) |>
+  mutate(
+    `Fraction of downward revisions` =
+      paste0(round(`Fraction of downward revisions` * 100, 1), "%"),
+    `Total revision (thousands)` =
+      round(`Total revision (thousands)`, 1),
+    `Average monthly revision (thousands)` =
+      round(`Average monthly revision (thousands)`, 1)
+  ) |>
+  arrange(desc(period)) |>
+  as.data.frame()
+
+knitr::kable(
+  claim1_period_summary,
+  format  = "html",
+  caption = "Claim 1: Cumulative and Average CES Revisions Post-Election vs Historical Baseline"
+)
+
+
+```
+
+
+
+
+# Claim 2: Stefanik (2024): “The Biden administration has been cooking the books — the jobs numbers keep getting revised down.” 
+
+In task 3, we computed the top 5 longest runs of downward revisions. 
+
+```{r}
+# Longest runs of downward CES revisions
+
+
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+
+
+# Flag months with downward revisions
+
+ces_down <- ces_full |>
+  arrange(date) |>                     # chronological order
+  mutate(
+    is_down = revision < 0              # TRUE if revision is negative
+  )
+
+
+#  Identify consecutive runs using run-length encoding
+#    Each run (up or down) gets a unique run_id
+
+run_id_vec <- with(
+  rle(ces_down$is_down),
+  rep(seq_along(values), lengths)
+)
+
+ces_down <- ces_down |>
+  mutate(run_id = run_id_vec)
+
+
+#  Summarize only the downward runs
+
+down_runs <- ces_down |>
+  filter(is_down) |>                   # keep only negative revisions
+  group_by(run_id) |>
+  summarise(
+    start_date = min(date),
+    end_date   = max(date),
+    n_months   = n(),                   # length of the streak
+    .groups    = "drop"
+  )
+
+
+# Select the top 5 longest downward streak
+down_runs_top5 <- down_runs |>
+  arrange(desc(n_months)) |>
+  slice_head(n = 5)
+
+
+# Format table 
+
+
+top5_down_runs_table <- down_runs_top5 |>
+  transmute(
+    `Start date`        = start_date,
+    `End date`          = end_date,
+    `Length (months)`   = n_months
+  ) |>
+  as.data.frame()
+
+knitr::kable(
+  top5_down_runs_table,
+  format  = "html",
+  caption = "Top 5 Longest Consecutive Runs of Downward CES Payroll Revisions"
+)
+```
+
+The claim states that the BLS had been revising numbers down consistently under Biden-nominated BLS Commisioner McEntarfer, which would imply a long run of downward revisions. While we do see a run of 6 months in 2024, it doesn't stand out. There are historical patterns of long runs, some of more than 6 months so nothing seems particularly out of the ordinary for 2024.
+
+```{r}
+ggplot(ces_full, aes(x = date, y = revision)) +
+  # shaded bands for the longest downward streaks
+  geom_rect(
+    data = down_runs_top5,
+    aes(xmin = start_date,
+        xmax = end_date,
+        ymin = -Inf,
+        ymax = Inf,
+        fill = factor(run_id)),
+    inherit.aes = FALSE,
+    alpha = 0.18,
+    color = NA
+  ) +
+  # full revision time series
+  geom_line(color = "grey30", linewidth = 0.35) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.3) +
+  scale_fill_brewer(palette = "Set2", name = "Downward run\n(ID)") +
+  labs(
+    title    = "Longest Streaks of Consecutive Downward CES Revisions",
+    subtitle = "Colored bands show the five longest stretches where revisions were negative every month",
+    x        = "Year",
+    y        = "Revision (Final – Original, thousands)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "bottom",
+    legend.title    = element_text(size = 11),
+    legend.text     = element_text(size = 9)
+  )
+
+```
+
+Also in Task 3, we found fraction of revisions over time shown in the table below.
+```{r}
+# Downward revisions
+library(dplyr)
+library(knitr)
+
+ces_full <- ces_full |>
+  mutate(
+    is_down = revision < 0
+  )
+
+down_frac_decade <- ces_full |>
+  group_by(decade) |>
+  summarise(
+    n_months  = n(),
+    n_down    = sum(is_down, na.rm = TRUE),
+    frac_down = n_down / n_months,
+    .groups = "drop"
+  )
+
+# HTML table 
+down_frac_decade |>
+  mutate(
+    `Share of downward revisions (%)` = round(frac_down * 100, 2)
+  ) |>
+  select(
+    Decade = decade,
+    `Total months` = n_months,
+    `Months with downward revisions` = n_down,
+    `Share of downward revisions (%)`
+  ) |>
+  as.data.frame() |>
+  kable(
+    format  = "html",
+    caption = "Share of Months with Downward CES Payroll Revisions, by Decade"
+  )
+```
+
+Let's modify this table to show the revisions from 2020 to 2025
+
+```{r}
+# Downward revisions (2020–2025)
+library(dplyr)
+library(knitr)
+
+ces_full_2020 <- ces_full |>
+  mutate(is_down = revision < 0) |>
+  filter(year >= 2020, year <= 2025)
+
+down_frac_2020 <- ces_full_2020 |>
+  group_by(year) |>
+  summarise(
+    n_months  = n(),
+    n_down    = sum(is_down, na.rm = TRUE),
+    frac_down = n_down / n_months,
+    .groups = "drop"
+  )
+
+# HTML table
+down_frac_2020 |>
+  mutate(
+    `Share of downward revisions (%)` = round(frac_down * 100, 2)
+  ) |>
+  select(
+    Year = year,
+    `Total months` = n_months,
+    `Months with downward revisions` = n_down,
+    `Share of downward revisions (%)`
+  ) |>
+  as.data.frame() |>
+  kable(
+    format  = "html",
+    caption = "Share of Months with Downward CES Payroll Revisions (2020–2025)"
+  )
+
+
+```
+
+2024 does appear to have a higher than normal share of negative revisions so there is some evidence that appears to support something going on in 2024.
+
+```{r}
+#annual averages 
+
+down_yearly <- ces_full |>
+  group_by(year) |>
+  summarise(frac_down = mean(is_down, na.rm = TRUE))
+
+#plot
+library(ggplot2)
+library(scales)
+
+p_down_trend <- ggplot(down_yearly, aes(x = year, y = frac_down)) +
+  geom_line(color = "#E63946", linewidth = 1.1) +
+  geom_smooth(method = "lm", se = TRUE, color = "#1D3557") +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    title = "Fraction of Downward CES Revisions Over Time",
+    subtitle = "Red = actual yearly share; Blue = linear trend",
+    x = "Year",
+    y = "Percent of months with downward revisions"
+  ) +
+  theme_minimal(base_size = 14)
+
+ggplotly(p_down_trend)
+```
+
+However when we look at the time plot of negative revisions, it fluctuates around 0% pretty consistently. There is a spike in 2024, but it looks relatively consistent with normal variation.
+
+Also if we factor in how often are revisions > 100k during the years 2020 - 2025 we can try to see whats going on in 2024
+
+```{r}
+
+# Restrict to 2020–2025
+big_rev_2020_2025 <- ces_full |>
+  filter(year >= 2020, year <= 2025) |>
+  group_by(year) |>
+  summarise(
+    n_months  = n(),
+    n_big_rev = sum(big_rev_100k, na.rm = TRUE),
+    frac_big  = n_big_rev / n_months,
+    .groups   = "drop"
+  )
+
+# Format as HTML table
+big_rev_2020_2025_table <- big_rev_2020_2025 |>
+  arrange(year) |>
+  mutate(
+    `Total months` = n_months,
+    `Months with |revision| ≥ 100k` = n_big_rev,
+    `Share of months (%)` = round(frac_big * 100, 2)
+  ) |>
+  select(
+    Year = year,
+    `Total months`,
+    `Months with |revision| ≥ 100k`,
+    `Share of months (%)`
+  ) |>
+  as.data.frame()
+
+knitr::kable(
+  big_rev_2020_2025_table,
+  format  = "html",
+  caption = "Frequency of Large CES Payroll Revisions (≥100,000 Jobs), 2020–2025"
+)
+
+
+
+```
+
+2024 only has one revision greater than 100k, so likely the revisions can just be attributed to normal data collection error and adjustment.
+
+
+
 
 
