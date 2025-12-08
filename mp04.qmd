@@ -41,6 +41,7 @@ library(dplyr)
 library(tidyr)
 library(stringr)
 library(lubridate)
+library(knitr)
 
 #  Send POST request using httr2
 resp <- httr2::request("https://data.bls.gov/pdq/SurveyOutputServlet") |>
@@ -94,7 +95,11 @@ ces_levels <- ces_raw |>
   ) |>
   tidyr::drop_na()
 
-
+kable(
+  ces_levels,
+  format  = "html",
+  caption = "Nonfarm Payroll Levels"
+)
 
 ```
 
@@ -112,6 +117,7 @@ library(tidyr)
 library(purrr)
 library(stringr)
 library(tibble)
+library(knitr)
 
 # Avoid HTTP/2 issues 
 options(curl_http_version = 2)
@@ -1710,7 +1716,7 @@ knitr::kable(
 ```
 
 
-## Claim 1: "Bureau of Labor Statistics employment numbers “were rigged” when the agency revised them “down by almost 900,000 jobs” after the 2024 election." -Donald Trump(2025)
+# Claim 1: "Bureau of Labor Statistics employment numbers “were rigged” when the agency revised them “down by almost 900,000 jobs” after the 2024 election." -Donald Trump(2025)
 ```{r}
 library(dplyr)
 library(knitr)
@@ -1992,41 +1998,194 @@ knitr::kable(
 We also computed revisions as a percent of the payroll, aka total jobs, in task 3. Using the levels, here we can see how tiny the revisions are compared to the total number of jobs. The yearly revisions are a very small fraction of total employment. So, there doesn't seem to be any evidence of significant "rigging" here.
 
 ##Tests
-First we define a baseline for the post 
+First we define post-election period
 ```{r}
-claim1_period_summary <- ces_period |>
-  group_by(period) |>
-  summarise(
-    `Total revision (thousands)` = sum(revision, na.rm = TRUE),
-    `Average monthly revision (thousands)` = mean(revision, na.rm = TRUE),
-    `Fraction of downward revisions` = mean(revision < 0, na.rm = TRUE),
-    `Number of months` = n(),
-    .groups = "drop"
-  ) |>
+# Define post-election period: Jan 2024 – Jun 2025
+ces_claim1 <- ces_full |>
+  filter(!is.na(revision)) |>
   mutate(
-    `Fraction of downward revisions` =
-      paste0(round(`Fraction of downward revisions` * 100, 1), "%"),
-    `Total revision (thousands)` =
-      round(`Total revision (thousands)`, 1),
-    `Average monthly revision (thousands)` =
-      round(`Average monthly revision (thousands)`, 1)
-  ) |>
-  arrange(desc(period)) |>
-  as.data.frame()
+    period = if_else(
+      date >= as.Date("2024-1-01") & date <= as.Date("2025-06-01"),
+      "Post-2024 election",
+      "Historical baseline"
+    ),
+    is_post = period == "Post-2024 election",
+    is_down = revision < 0
+  )
 
-knitr::kable(
-  claim1_period_summary,
-  format  = "html",
-  caption = "Claim 1: Cumulative and Average CES Revisions Post-Election vs Historical Baseline"
-)
+
 
 
 ```
+
+### Descriptive table
+```{r}
+period_summary <- ces_claim1 |>
+  group_by(period) |>
+  summarise(
+    total_revision  = sum(revision, na.rm = TRUE),           # thousands of jobs
+    mean_revision   = mean(revision, na.rm = TRUE),
+    median_revision = median(revision, na.rm = TRUE),
+    frac_down       = mean(is_down, na.rm = TRUE),
+    n_months        = n(),
+    .groups = "drop"
+  ) |>
+  mutate(
+    `Total revision (thousands)`       = total_revision,
+    `Mean monthly revision (thousands)`   = round(mean_revision, 1),
+    `Median monthly revision (thousands)` = round(median_revision, 1),
+    `Fraction of downward revisions`      = paste0(round(frac_down * 100, 1), "%"),
+    `Number of months`                    = n_months
+  ) |>
+  select(
+    period,
+    `Total revision (thousands)`,
+    `Mean monthly revision (thousands)`,
+    `Median monthly revision (thousands)`,
+    `Fraction of downward revisions`,
+    `Number of months`
+  )
+kable(
+  period_summary,
+  format  = "html",
+  caption = "Claim 1: Mean, Median, and Cumulative CES Revisions Post-Election vs Historical Baseline"
+)
+
+```
+
+### Test 1: T-test for the mean
+**Is the average monthly revision after the 2024 election unusually negative?** We will use a two sample t test using 'H0: mean revison of post-election period = mean of pre election period.
+HA: mean of post election period does not = mean of pre election period.
+
+```{r}
+library(infer)
+ttest_mean <- ces_claim1 |>
+  t_test(
+    revision ~ is_post,
+    order = c(FALSE, TRUE)   # post − historical
+  )
+
+ttest_mean_table <- ttest_mean |>
+  transmute(
+    `t statistic` = round(statistic, 3),
+    `df`          = round(t_df, 1),
+    `p-value`     = round(p_value, 3),
+    `Estimate (post − hist, thousands)` = round(estimate, 1),
+    `95% CI lower` = round(lower_ci, 1),
+    `95% CI upper` = round(upper_ci, 1)
+  ) |>
+  as.data.frame()
+
+kable(
+  ttest_mean_table,
+  format  = "html",
+  caption = "Claim 1 – Test 1: Difference in Mean CES Revision (Post-Election − Historical)"
+)
+
+```
+Here we see a very small p-value suggesting that we reject our null hypothesis and conclude that the mean of revisions during the post election period do not equal the mean revision of historical data.
+
+### Permutation test for the mean
+
+```{r}
+set.seed(123)
+perm_mean <- ces_claim1 |>
+  specify(revision ~ is_post) |>
+  hypothesize(null = "independence") |>
+  generate(reps = 2000, type = "permute") |>
+  calculate(stat = "diff in means", order = c(TRUE, FALSE))
+
+perm_mean_pval <- get_p_value(
+  perm_mean,
+  obs_stat  = ttest_mean$estimate,
+  direction = "two-sided"
+)
+
+perm_mean_pval_table <- perm_mean_pval |>
+  transmute(`Permutation p-value (mean diff)` = round(p_value, 3)) |>
+  as.data.frame()
+
+kable(
+  perm_mean_pval_table,
+  format  = "html",
+  caption = "Claim 1 – Test 1 (Computational): Permutation p-value for Difference in Mean Revision"
+)
+
+```
+Again we see a p-value less than .05 suggesting that there is difference in the post election mean differs from the mean of historical data under normality assumptions
+
+
+### Test 2: Testing the median with bootstrap 
+
+```{r}
+set.seed(123)
+boot_median_diff <- ces_claim1 |>
+  specify(revision ~ is_post) |>
+  generate(reps = 2000, type = "bootstrap") |>
+  calculate(stat = "diff in medians", order = c(TRUE, FALSE))  # post − hist
+
+boot_median_ci <- boot_median_diff |>
+  get_confidence_interval(type = "percentile")
+
+boot_median_ci_table <- boot_median_ci |>
+  transmute(
+    `95% CI lower (thousands)` = round(lower_ci, 1),
+    `95% CI upper (thousands)` = round(upper_ci, 1)
+  ) |>
+  as.data.frame()
+
+kable(
+  boot_median_ci_table,
+  format  = "html",
+  caption = "Claim 1 – Test 2: Bootstrap 95% CI for Difference in Median CES Revision (Post − Historical)"
+)
+
+```
+
+Bootstrapping repeatedly resamples the observed post-election months to estimate the uncertainty around the median revision without parametric assumptions. Given that the confidence interval does not contain 0 we cannot reject the null hypothesis suggesting that the data in the post election period is different from historical data.
+
+### Test 3: binomial prop test
+```{r}
+library(infer)
+library(dplyr)
+
+
+ces_claim1_clean <- ces_claim1 |>
+  mutate(
+    # Convert the logical 'is_down' to a factor, where TRUE is the 'success' level
+    is_down_factor = factor(is_down, levels = c(FALSE, TRUE), labels = c("No Down Rev", "Down Rev")),
+    # Convert the logical 'is_post' (grouping variable) to a factor
+    is_post_factor = factor(is_post, levels = c(FALSE, TRUE), labels = c("Historical", "Post-2015"))
+  )
+
+
+prop_test_result <- ces_claim1_clean |>
+  # Test the proportion of 'is_down_factor' (success = 'Down Rev') 
+  # across the groups defined by 'is_post_factor'
+  prop_test(
+    is_down_factor ~ is_post_factor,
+    order = c("Historical", "Post-2015") # This sets the difference as: Post-2015 - Historical
+  )
+
+# 3. View the result
+prop_test_result
+
+```
+The p-value of the prop test is still less than .05 indicating that there is statistically significant difference in the probability of getting a downward revision in the post election period vs historical data.
+
+
+## Conclusions
+We are not able to reject the null hypothesis that downward revisions have increased in the post-election period. While correlation does not equal causation, the results of our 3 tests indicate that there is an increased probability of getting a downward revision in the post-election period. While there is no way to tell if this was because of political bias or outright manipulation by the BLS, there is a difference in historical downward revisions and post-election period downward revisions.
+
+
+
 
 
 
 
 # Claim 2: Stefanik (2024): “The Biden administration has been cooking the books — the jobs numbers keep getting revised down.” 
+
+## Statistics
 
 In task 3, we computed the top 5 longest runs of downward revisions. 
 
@@ -2283,7 +2442,93 @@ knitr::kable(
 
 2024 only has one revision greater than 100k, so likely the revisions can just be attributed to normal data collection error and adjustment.
 
+## Tests
 
+In our earlier statistical analysis we tested whether or not large downward revision. The following table shows that there are more downward revisions during trumps presidency.
+
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(knitr)
+
+ces_era <- ces_full |>
+  mutate(
+    era = case_when(
+      date >= as.Date("2020-01-01") & date <= as.Date("2023-12-01") ~ "Biden era",
+      date >= as.Date("2024-01-01") & date <= as.Date("2025-06-01") ~ "Trump era",
+      TRUE ~ NA_character_
+    )
+  ) |>
+  filter(!is.na(era))
+era_summary_table <- ces_era |>
+  summarise(
+    mean_rev_biden   = mean(revision[era == "Biden era"], na.rm = TRUE),
+    mean_rev_trump   = mean(revision[era == "Trump era"], na.rm = TRUE),
+    median_rev_biden = median(revision[era == "Biden era"], na.rm = TRUE),
+    median_rev_trump = median(revision[era == "Trump era"], na.rm = TRUE),
+    frac_down_biden  = mean(revision[era == "Biden era"] < 0, na.rm = TRUE),
+    frac_down_trump  = mean(revision[era == "Trump era"] < 0, na.rm = TRUE),
+    n_biden          = sum(era == "Biden era"),
+    n_trump          = sum(era == "Trump era")
+  ) |>
+  mutate(
+    `Mean revision (Biden, k)`   = round(mean_rev_biden, 1),
+    `Mean revision (Trump, k)`   = round(mean_rev_trump, 1),
+    `Median revision (Biden, k)` = round(median_rev_biden, 1),
+    `Median revision (Trump, k)` = round(median_rev_trump, 1),
+    `Downward share (Biden %)`   = round(frac_down_biden * 100, 1),
+    `Downward share (Trump %)`   = round(frac_down_trump * 100, 1)
+  ) |>
+  select(
+    `Mean revision (Biden, k)`,
+    `Mean revision (Trump, k)`,
+    `Median revision (Biden, k)`,
+    `Median revision (Trump, k)`,
+    `Downward share (Biden %)`,
+    `Downward share (Trump %)`,
+    `Biden months` = n_biden,
+    `Trump months` = n_trump
+  ) |>
+  as.data.frame()
+
+kable(
+  era_summary_table,
+  format  = "html",
+  caption = "CES Revision Statistics: Biden Era vs Trump Era"
+)
+
+
+```
+However, given the following p-value, there is not significant evidence that revisions under the Biden administration were larger or more negative than the Trump administration.
+
+```{r}
+t_test_era <- t.test(
+  revision ~ era,
+  data = ces_era,
+  alternative = "two.sided"
+)
+
+t_test_era_table <- data.frame(
+  `t statistic` = round(t_test_era$statistic, 3),
+  `Degrees of freedom` = round(t_test_era$parameter, 1),
+  `p-value` = round(t_test_era$p.value, 4),
+  `Mean difference (Trump − Biden)` =
+    round(diff(t_test_era$estimate), 2)
+)
+
+kable(
+  t_test_era_table,
+  format  = "html",
+  caption = "Two-Sample t-Test: Mean CES Revisions (Trump Era − Biden Era)"
+)
+
+
+```
+
+
+# Conclusions:
+There is no direct evidence that the Biden administration ever manipulated or falsified jobs reports. While yes there was an increase in revision during the post election period of **January 2024 to June of 2025, there is no evidence that the Biden administration purposefully altered jobs reports. 
 
 
 
