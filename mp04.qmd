@@ -29,7 +29,7 @@ library(tidyr)
 library(stringr)
 library(lubridate)
 
-# Step 1: Send POST request using httr2
+#  Send POST request using httr2
 resp <- httr2::request("https://data.bls.gov/pdq/SurveyOutputServlet") |>
   httr2::req_method("POST") |>
   httr2::req_headers(
@@ -51,7 +51,7 @@ resp <- httr2::request("https://data.bls.gov/pdq/SurveyOutputServlet") |>
   ) |>
   httr2::req_perform()
 
-# Step 2: Parse HTML and grab the correct (second) table
+# Parse HTML and grab the correct (second) table
 html <- httr2::resp_body_html(resp)
 
 tables <- html |>
@@ -61,7 +61,7 @@ tables <- html |>
 ces_raw <- tables[[2]] |>
   rvest::html_table()
 
-# Step 3: Reshape Year/Jan...Dec into monthly date + level
+#  Reshape Year/Jan...Dec into monthly date + level
 ces_levels <- ces_raw |>
   tidyr::pivot_longer(
     cols      = -Year,          # all columns except Year
@@ -91,7 +91,7 @@ ces_levels <- ces_raw |>
 
 
 ```{r}
-# ============= PACKAGES =============
+
 library(httr2)
 library(rvest)
 library(dplyr)
@@ -100,10 +100,10 @@ library(purrr)
 library(stringr)
 library(tibble)
 
-# Avoid HTTP/2 issues some Windows setups have with BLS
+# Avoid HTTP/2 issues 
 options(curl_http_version = 2)
 
-# ============= 1. REQUEST PAGE WITH httr2 =============
+# reques with hhtr2 
 url_ces <- "https://www.bls.gov/web/empsit/cesnaicsrev.htm"
 
 req_ces <- httr2::request(url_ces) |>
@@ -122,7 +122,7 @@ resp_ces <- httr2::req_perform(req_ces)
 page_ces <- resp_ces |>
   httr2::resp_body_html()
 
-# ============= 2. FUNCTION FOR A SINGLE YEAR =============
+
 # Returns: date, original, final, revision
 get_ces_revisions_year <- function(year, html_page = page_ces) {
 
@@ -164,7 +164,7 @@ get_ces_revisions_year <- function(year, html_page = page_ces) {
       final    = 5    # third estimate
     ) |>
     dplyr::mutate(
-      # 1..12 as month index
+      #  month index
       month_index = dplyr::row_number(),
 
       # Build date as "YYYY-MM-01" using the year argument
@@ -185,7 +185,7 @@ get_ces_revisions_year <- function(year, html_page = page_ces) {
   tbl_clean
 }
 
-# ============= 3. APPLY TO ALL YEARS 1979–2025 =============
+# apply to all years
 years_vec <- 1979:2025
 
 ces_revisions_all <- purrr::map_dfr(
@@ -193,7 +193,7 @@ ces_revisions_all <- purrr::map_dfr(
   get_ces_revisions_year
 )
 
-# ============= 4. FILTER TO JAN 1979 – JUN 2025 =============
+#  Filter to jan 1979 – jun 2025 
 ces_revisions <- ces_revisions_all |>
   dplyr::filter(
     date >= as.Date("1979-01-01"),
@@ -238,14 +238,14 @@ ces_full <- ces_levels |>
 library(dplyr)
 library(knitr)
 
-# 1. Largest positive revision (Final - Original > 0)
+# Largest positive revision (Final - Original > 0)
 largest_positive <- ces_full |>
   filter(revision > 0, !is.na(revision)) |>
   arrange(desc(revision)) |>
   slice(1)
 
 
-# 2. Nicely formatted HTML table, including level
+# formatted HTML table
 largest_positive_table <- largest_positive |>
   transmute(
     Date                         = date,
@@ -279,13 +279,13 @@ kable(
 library(dplyr)
 library(knitr)
 
-# 1. Largest NEGATIVE revision (most negative Final - Original)
+# Largest NEGATIVE revision (most negative Final - Original)
 largest_negative <- ces_full |>
   filter(!is.na(revision)) |>
   arrange(revision) |>        # most negative first
   slice(1)
 
-# 2. Format nicely for HTML table
+# Format for HTML table
 largest_negative_table <- largest_negative |>
   transmute(
     Date = date,
@@ -307,7 +307,7 @@ largest_negative_table <- largest_negative |>
   ) |>
   as.data.frame()
 
-# 3. HTML table
+# HTML table
 kable(
   largest_negative_table,
   caption = "Largest Negative CES Payroll Revision (Final − Original)",
@@ -530,7 +530,7 @@ library(dplyr)
 library(ggplot2)
 library(plotly)
 
-## 1. Election years + colors (your original palette)
+##  Election years + colors 
 
 election_years <- c(1980, 1984, 1988, 1992, 1996, 2000,
                     2004, 2008, 2012, 2016, 2020, 2024)
@@ -550,7 +550,7 @@ election_colors <- c(
   "2024" = "#8E7DBE"
 )
 
-## 2. Make sure the helper columns exist on ces_full
+## Make sure the helper columns exist on ces_full
 
 ces_mag_plot <- ces_full |>
   mutate(
@@ -559,18 +559,18 @@ ces_mag_plot <- ces_full |>
     election_factor  = factor(year)
   )
 
-## 3. Build the ggplot version with THIN lines
+## Build the ggplot version with Thin lines
 
 p_mag <- ggplot() +
-  # grey background: all months, *very* thin
+  # grey background: all months, very thin
   geom_line(
     data = ces_mag_plot,
     aes(x = date, y = abs_rev),
     color = "grey70",
-    linewidth = 0.2,   # thinner than before
+    linewidth = 0.2,   
     alpha = 0.7
   ) +
-  # election years: colored, still a bit thinner than the old plot
+  # election years: colored
   geom_line(
     data = ces_mag_plot |> filter(is_election_year),
     aes(x = date, y = abs_rev, color = election_factor),
@@ -593,7 +593,7 @@ p_mag <- ggplot() +
     legend.text     = element_text(size = 10)
   )
 
-## 4. Convert to interactive plotly
+## Convert to interactive plotly
 
 ggplotly(p_mag)
 
@@ -639,7 +639,7 @@ ces_dir_plot <- ces_full |>
     election_factor  = factor(year)
   )
 
-# Thinner lines + distinct colors
+# Thin + distinct colors
 p_dir <- ggplot() +
   # background: all months in light grey, thin
   geom_line(
@@ -684,7 +684,7 @@ ces_full <- ces_full |>
   mutate(
     big_rev_100k = abs(revision) >= 100  # 100 = 100,000 jobs
   )
-#Sare of months with rev > 100k
+#Share of months with rev > 100k
 big_rev_overall <- ces_full |>
   summarise(
     n_months   = n(),
@@ -803,7 +803,7 @@ down_frac_decade <- ces_full |>
     .groups = "drop"
   )
 
-# HTML table (no tibbles shown)
+# HTML table 
 down_frac_decade |>
   mutate(
     `Share of downward revisions (%)` = round(frac_down * 100, 2)
@@ -952,27 +952,27 @@ cat(
 
 
 ```{r}
-# ===============================
+
 # Longest runs of downward CES revisions
-# ===============================
+
 
 library(dplyr)
 library(lubridate)
 library(ggplot2)
 
-# --------------------------------------------------
-# 1. Flag months with downward revisions
-# --------------------------------------------------
+
+# Flag months with downward revisions
+
 ces_down <- ces_full |>
-  arrange(date) |>                     # ensure chronological order
+  arrange(date) |>                     # chronological order
   mutate(
     is_down = revision < 0              # TRUE if revision is negative
   )
 
-# --------------------------------------------------
-# 2. Identify consecutive runs using run-length encoding
+
+#  Identify consecutive runs using run-length encoding
 #    Each run (up or down) gets a unique run_id
-# --------------------------------------------------
+
 run_id_vec <- with(
   rle(ces_down$is_down),
   rep(seq_along(values), lengths)
@@ -981,9 +981,9 @@ run_id_vec <- with(
 ces_down <- ces_down |>
   mutate(run_id = run_id_vec)
 
-# --------------------------------------------------
-# 3. Summarize only the downward runs
-# --------------------------------------------------
+
+#  Summarize only the downward runs
+
 down_runs <- ces_down |>
   filter(is_down) |>                   # keep only negative revisions
   group_by(run_id) |>
@@ -994,17 +994,16 @@ down_runs <- ces_down |>
     .groups    = "drop"
   )
 
-# --------------------------------------------------
-# 4. Select the top 5 longest downward streaks
-# --------------------------------------------------
+
+# Select the top 5 longest downward streak
 down_runs_top5 <- down_runs |>
   arrange(desc(n_months)) |>
   slice_head(n = 5)
 
-# --------------------------------------------------
-# 5. Format table for presentation (HTML)
-#    No new calculations here — presentation only
-# --------------------------------------------------
+
+# Format table 
+
+
 top5_down_runs_table <- down_runs_top5 |>
   transmute(
     `Start date`        = start_date,
@@ -1019,9 +1018,7 @@ knitr::kable(
   caption = "Top 5 Longest Consecutive Runs of Downward CES Payroll Revisions"
 )
 
-# --------------------------------------------------
-# 6. Plot: highlight the longest downward streaks
-# --------------------------------------------------
+
 
 
 
@@ -1086,7 +1083,7 @@ ces_gain <- ces_gain |>
 ```{r}
 library(dplyr)
 
-# 1) Compute month-to-month payroll change and bin into quintiles
+#  Compute month-to-month payroll change and bin into quantiles
 ces_growth_bins <- ces_full |>
   arrange(date) |>
   mutate(
@@ -1097,7 +1094,7 @@ ces_growth_bins <- ces_full |>
     growth_bin = dplyr::ntile(payroll_change, 5)  # 1 = weakest, 5 = strongest growth
   )
 
-# 2) For each growth bin: mean signed revision and fraction downward
+#For each growth bin: mean signed revision and fraction downward
 growth_bin_stats <- ces_growth_bins |>
   group_by(growth_bin) |>
   summarise(
@@ -1121,9 +1118,8 @@ growth_bin_stats <- ces_growth_bins |>
     frac_downward_pct = 100 * frac_downward
   )
 
-# --------------------------------------------------
-# Format table for presentation (no new calculations)
-# --------------------------------------------------
+# Format table for presentation
+
 
 growth_bin_table <- growth_bin_stats |>
   transmute(
@@ -1207,9 +1203,8 @@ pct_payroll_by_decade <- ces_full |>
   arrange(decade)
 
 
-# --------------------------------------------------
-# Format table for presentation (no new calculations)
-# --------------------------------------------------
+
+# Format table for presentation 
 
 pct_payroll_table <- pct_payroll_by_decade |>
   transmute(
@@ -1270,11 +1265,11 @@ ggplot(pct_payroll_by_decade,
 library(infer)
 library(dplyr)
 
-# ------------------------------------------------------------
-# Compare revision size after large vs normal payroll gains
-# ------------------------------------------------------------
 
-# Step 1: Compute month-to-month payroll change and absolute revision size
+# Compare revision size after large vs normal payroll gains
+
+
+#  Compute month-to-month payroll change and absolute revision size
 ces_gain <- ces_full |>
   arrange(date) |>
   mutate(
@@ -1283,14 +1278,14 @@ ces_gain <- ces_full |>
   ) |>
   filter(!is.na(payroll_change), !is.na(abs_rev))
 
-# Step 2: Define "large payroll gain" as the top 10% of monthly changes
+#  Define "large payroll gain" as the top 10% of monthly changes
 gain_threshold <- quantile(
   ces_gain$payroll_change,
   0.9,
   na.rm = TRUE
 )
 
-# Step 3: Classify months
+#  Classify months
 ces_gain <- ces_gain |>
   mutate(
     large_gain = if_else(
@@ -1300,7 +1295,7 @@ ces_gain <- ces_gain |>
     )
   )
 
-# Step 4: Two-sample t-test
+# Two-sample t-test
 # H0: Mean absolute revision is the same for both groups
 # HA: Mean absolute revision differs
 ttest_large_gain <- ces_gain |>
@@ -1311,9 +1306,9 @@ ttest_large_gain <- ces_gain |>
 
 
 
-# ------------------------------------------------------------
-# Step 5: Summary table for presentation
-# ------------------------------------------------------------
+
+# Summary table for presentation
+
 
 ttest_large_gain_table <- ttest_large_gain |>
   transmute(
@@ -1345,10 +1340,10 @@ library(infer)
 library(dplyr)
 library(knitr)
 
-# ------------------------------------------------------------
+
 # PERMUTATION TEST
 # H0: Absolute revisions are independent of large payroll gains
-# ------------------------------------------------------------
+
 
 set.seed(123)
 
@@ -1376,10 +1371,10 @@ perm_pval <- get_p_value(
   direction = "two-sided"
 )
 
-# ------------------------------------------------------------
+
 # BOOTSTRAP CONFIDENCE INTERVAL
-# Estimates uncertainty around the SAME statistic
-# ------------------------------------------------------------
+# Estimates uncertainty around the same statistic
+
 
 boot_large_gain <- ces_gain |>
   specify(abs_rev ~ large_gain) |>
@@ -1392,9 +1387,9 @@ boot_large_gain <- ces_gain |>
 boot_large_gain_ci <- boot_large_gain |>
   get_confidence_interval(type = "percentile")
 
-# ------------------------------------------------------------
-# FORMAT RESULTS INTO A TABLE (presentation only)
-# ------------------------------------------------------------
+
+# table
+
 
 boot_large_gain_ci_table <- boot_large_gain_ci |>
   transmute(
@@ -1423,24 +1418,24 @@ library(infer)
 library(dplyr)
 library(knitr)
 
-# ------------------------------------------------------------
+
 # PURPOSE:
 # Use a bootstrap (computational inference) to estimate
 # the sampling distribution of the MEDIAN CES revision.
 # This avoids normality assumptions and targets the median,
 # not the mean.
-# ------------------------------------------------------------
+
 
 # Keep only months with observed revisions
 ces_rev_ok <- ces_full |>
   filter(!is.na(revision))
 
-# ------------------------------------------------------------
+
 # BOOTSTRAP:
-# Repeatedly resample months WITH replacement and
+# Repeatedly resample months and replacement and
 # compute the median revision each time.
 # This approximates the sampling distribution of the median.
-# ------------------------------------------------------------
+
 set.seed(123)
 
 boot_median_rev <- ces_rev_ok |>
@@ -1448,20 +1443,19 @@ boot_median_rev <- ces_rev_ok |>
   generate(reps = 2000, type = "bootstrap") |>
   calculate(stat = "median")
 
-# ------------------------------------------------------------
+
 # CONFIDENCE INTERVAL:
 # Percentile-based 95% bootstrap confidence interval
 # for the population median revision.
-# ------------------------------------------------------------
+
 boot_median_ci <- boot_median_rev |>
   get_confidence_interval(
     level = 0.95,
     type  = "percentile"
   )
 
-# ------------------------------------------------------------
-# FORMAT RESULTS AS AN HTML TABLE (no tibble output)
-# ------------------------------------------------------------
+
+# table
 boot_median_ci_table <- boot_median_ci |>
   transmute(
     `95% CI lower (thousands of jobs)` = round(lower_ci, 2),
@@ -1489,8 +1483,7 @@ obs_median_rev <- ces_rev_ok |>
   )
 
 # Format the result for presentation
-# - Keep units explicit (thousands of jobs)
-# - Use plain data.frame for clean HTML rendering
+
 obs_median_rev_table <- obs_median_rev |>
   transmute(
     `Median CES revision (thousands of jobs)` = median_revision
@@ -1516,7 +1509,7 @@ library(lubridate)
 library(infer)
 library(knitr)
 
-## 1. Build president/party lookup ---------------------------------------
+## 1. Build president/party lookup 
 presidents_party <- tidyr::expand_grid(
   year      = 1979:2025,
   month     = month.name,
@@ -1547,7 +1540,7 @@ presidents_party <- tidyr::expand_grid(
     )
   )
 
-## 2. Join to CES and create downward indicator --------------------------
+## Join to CES and create downward indicator 
 ces_party <- ces_full |>
   mutate(
     year  = year(date),
@@ -1561,7 +1554,7 @@ ces_party <- ces_full |>
     party         = factor(party, levels = c("R", "D")) # order: Republicans, then Democrats
   )
 
-## 3. Descriptive: fraction of downward revisions by party ---------------
+##  fraction of downward revisions by party
 # Here we just describe how often revisions are negative under each party
 party_downward_summary <- ces_party |>
   group_by(party) |>
@@ -1591,7 +1584,7 @@ kable(
   caption = "Share of Months with Downward CES Revisions, by President’s Party"
 )
 
-## 4. Classical prop_test (theory-based χ² test) -------------------------
+## 4. Classical prop_test (theory-based χ² test) 
 # Formal test of H0: probability of a downward revision is the same under R and D
 # prop_test() does a 2×2 chi-square test on downward (yes/no) by party (R/D)
 prop_party <- ces_party |>
@@ -1624,7 +1617,7 @@ kable(
 ```
 
 ```{r}
-## 5. EXTRA CREDIT: permutation + bootstrap with infer -------------------
+##  EXTRA CREDIT: permutation + bootstrap with infer 
 # Observed difference in proportions: p_D - p_R
 obs_party_diff <- ces_party |>
   specify(response = downward_chr,
@@ -1635,7 +1628,7 @@ obs_party_diff <- ces_party |>
 
 
 
-# 5a. Permutation test under H0: no party effect on downward probability
+#  Permutation test under H0: no party effect on downward probability
 set.seed(123)
 
 perm_party <- ces_party |>
@@ -1654,7 +1647,7 @@ perm_pval <- get_p_value(
 
 
 
-# 5b. Bootstrap CI for p_D - p_R (computational CI)
+#  Bootstrap CI for p_D - p_R (computational CI)
 set.seed(123)
 
 boot_party <- ces_party |>
@@ -1668,7 +1661,7 @@ boot_ci <- boot_party |>
 
 
 
-# ---- Summarise permutation + bootstrap results in one table -----------
+#Summarise permutation + bootstrap results in one table 
 
 
 
