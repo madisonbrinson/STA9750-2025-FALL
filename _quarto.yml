@@ -19,6 +19,8 @@ website:
       text: Mini Project 02
     - href: mp03.qmd
       text: Mini Project 03
+    - href: mp04.qmd
+      text: Mini Project 04
 format:
   html:
     page-layout: full
