@@ -1,6 +1,5 @@
 ---
 title: "Mini-Project #04: Just the Fact(-Check)s, Ma’am!"
-author: "Your Name"
 format:
   html:
     toc: true
@@ -13,12 +12,26 @@ execute:
   warning: false
   message: false
 ---
+
+# Introdution
+
+Beginning in 2024, the trustworthiness of the Bureau of Labor Statistics came under scrutiny. Claims from multiple politicians have been circulating that the recent US employment numbers, and the subsequent revisions, could not be trusted. Particularly, some statements asserted that the jobs numbers had been purposefully overstated and then later revised downwards.
+
+These claims received greater attention following President Donald Trump's public criticism of the BLS. Then, in 2025, Trump removed Biden-nominated BLS Commissioner Erika McEntarfer, citing "rigged" jobs reports and downward revisions to employment numbers as evidence that the agency's data was inaccurate, manipulated, and politically biased.
+
+**Did the BLS really rig the jobs reports through overstatement of employment numbers and downward revisions?**
+
+Revisions to monthly employment estimates are a routine part of the Bureau of Labor Statistics data process. Initial numbers are based on incomplete surveys given to households and businesses and are later revised as more payroll information becomes available. This data collection process results in both upward and downward revisions, regardless of the political climate.
+
+The key question we will address in our analysis is whether the recent revisions significantly and meaningfully depart from historical patterns and trends. If the revisions in recent years are unusually large, frequent or disproportionately negative compared to previous decades, this would lend support to the claims that the BLS's employment data is unreliable. If not, revisions may just reflect the normal uncertainty with typical data collection processes in real-time measurement.
+
 # Data Aquistion
 
 
-We download the data
+To begin our analysis we download the CES Estimates and the CES Revisions data sets directly from the Bureau of Labr Statistics. 
 
 ## Downloading Final CES Estimates 
+
 
 ```{r}
 
@@ -234,6 +247,8 @@ ces_full <- ces_levels |>
 
 ## Largest Revisions
 
+### When was the largest positive Revision?
+
 ```{r}
 library(dplyr)
 library(knitr)
@@ -274,6 +289,11 @@ kable(
 )
 
 ```
+
+The largest **positive** revision was in **December of 1984**. 
+
+
+### When was the largest negative revision?
 
 ```{r}
 library(dplyr)
@@ -317,6 +337,8 @@ kable(
 
 
 ```
+
+
 
 ```{r}
 library(ggplot2)
@@ -1408,7 +1430,6 @@ knitr::kable(
 
 ```
 
-## Are revisions systematically more negative when job growth is large?
 
 
 
@@ -1501,7 +1522,7 @@ knitr::kable(
 
 ```
 
-
+## Are Downward revisions more common in Democratic or Republican Precidencies?
 
 ```{r}
 library(dplyr)
@@ -1685,11 +1706,241 @@ knitr::kable(
 ```
 
 
-## Claims 
+## Claim 1: "Bureau of Labor Statistics employment numbers “were rigged” when the agency revised them “down by almost 900,000 jobs” after the 2024 election." -Donald Trump(2025)
+```{r}
+library(dplyr)
+library(knitr)
 
-Bureau of Labor Statistics employment numbers “were rigged” when the agency revised them “down by almost 900,000 jobs” after the 2024 election
+# Largest NEGATIVE revision (most negative Final - Original)
+largest_negative <- ces_full |>
+  filter(!is.na(revision)) |>
+  arrange(revision) |>        # most negative first
+  slice(1)
 
-Stefanik (2024):
-“The Biden administration has been cooking the books — the jobs numbers keep getting revised down.”
+# Format for HTML table
+largest_negative_table <- largest_negative |>
+  transmute(
+    Date = date,
+
+    `Payroll level (jobs)` =
+      formatC(level * 1000, format = "f", digits = 0, big.mark = ","),
+
+    `Original employment (jobs)` =
+      formatC(original * 1000, format = "f", digits = 0, big.mark = ","),
+
+    `Final employment (jobs)` =
+      formatC(final * 1000, format = "f", digits = 0, big.mark = ","),
+
+    `Revision (jobs)` =
+      formatC(revision * 1000, format = "f", digits = 0, big.mark = ","),
+
+    `Revision (%)` =
+      paste0(round(pct_revision * 100, 2), "%")
+  ) |>
+  as.data.frame()
+
+# HTML table
+kable(
+  largest_negative_table,
+  caption = "Largest Negative CES Payroll Revision (Final − Original)",
+  format  = "html"
+)
+
+
+
+```
+
+
+
+Using the data from Task 3, we see that the largest **downward** revision was in June of 2021 at 672,000 jobs which 1st of all was **not** in 2024 and was nowhere near a loss of 900,000 jobs. In the following visualization, notice the "spike" downward around the year 2021.
+Covid was likely the driver of the huge negative revision in 2021.
+```{r}
+p_revisions <- ces_full |>
+  ggplot(aes(x = date, y = revision)) +
+  geom_hline(yintercept = 0, color = "gray50") +
+  geom_line(color = "#e31a1c", linewidth = 0.7) +
+  labs(
+    title = "CES Payroll Revisions Over Time",
+    subtitle = "Positive = revised upward; Negative = revised downward",
+    x = "Year",
+    y = "Revision (Final - Original)"
+  ) +
+  theme_minimal(base_size = 14)
+
+p_revisions
+
+
+```
+
+From Task 3 we determined how rare are huge revisions so revisions > 100k. 
+```{r}
+big_rev_by_decade <- ces_full |>
+  group_by(decade) |>
+  summarise(
+    n_months  = n(),
+    n_big_rev = sum(big_rev_100k, na.rm = TRUE),
+    frac_big  = n_big_rev / n_months,
+    .groups = "drop"
+  )
+
+
+big_rev_by_decade_table <- big_rev_by_decade |>
+  arrange(decade) |>
+  mutate(
+    `Total months` = n_months,
+    `Months with |revision| ≥ 100k` = n_big_rev,
+    `Share of months (%)` = round(frac_big * 100, 2)
+  ) |>
+  select(
+    Decade = decade,
+    `Total months`,
+    `Months with |revision| ≥ 100k`,
+    `Share of months (%)`
+  ) |>
+  as.data.frame()
+
+knitr::kable(
+  big_rev_by_decade_table,
+  format  = "html",
+  caption = "How Rare Are CES Payroll Revisions ≥ 100,000 Jobs?"
+)
+
+
+
+```
+Compared to previous decades two decades, the 2020's do seem to have an unusually high frequency of monthly revisions at **18.18%** but do not have the highest frequency of monthly revisions. However, this discrepancy can probably mostly be accounted for by the huge spike in 2021. 
+```{r}
+library(ggplot2)
+library(scales)
+
+p_big_decade <- ggplot(big_rev_by_decade,
+                       aes(x = factor(decade), y = frac_big)) +
+  geom_col(fill = "#0081A7") +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  labs(
+    title    = "How Often Do CES Revisions Exceed ±100,000 Jobs?",
+    subtitle = "Share of months with |revision| ≥ 100,000 jobs by decade",
+    x        = "Decade",
+    y        = "Months with big revisions (%)"
+  ) +
+  theme_minimal(base_size = 14)
+
+p_big_decade
+```
+
+Finally, we computed in Task 3, the most negative monthly revision in an election year.
+
+```{r}
+# direction
+election_direction_stats <- ces_full |>
+  group_by(year) |>
+  filter(is_election_year) |>
+  summarize(
+    mean_signed_rev   = mean(revision, na.rm = TRUE),
+    median_signed_rev = median(revision, na.rm = TRUE),
+    min_signed_rev    = min(revision, na.rm = TRUE),
+    max_signed_rev    = max(revision, na.rm = TRUE)
+  )
+
+
+
+
+election_direction_table <- election_direction_stats |>
+  mutate(
+    Year = year,
+    `Mean revision (jobs)`   = round(mean_signed_rev * 1000, 0),
+    `Median revision (jobs)` = round(median_signed_rev * 1000, 0),
+    `Most negative revision (jobs)` = round(min_signed_rev * 1000, 0),
+    `Most positive revision (jobs)` = round(max_signed_rev * 1000, 0)
+  ) |>
+  select(
+    Year,
+    `Mean revision (jobs)`,
+    `Median revision (jobs)`,
+    `Most negative revision (jobs)`,
+    `Most positive revision (jobs)`
+  ) |>
+  mutate(across(-Year, ~ formatC(.x, format = "f", digits = 0, big.mark = ","))) |>
+  as.data.frame()
+
+knitr::kable(
+  election_direction_table,
+  format  = "html",
+  caption = "Direction of CES Payroll Revisions in Election Years"
+)
+
+```
+We can see that in 2024, the most negative revision was *104,000* comparable to previous election years. 
+
+```{r}
+library(plotly)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+# Election years and colors
+election_years <- c(1980, 1984, 1988, 1992, 1996, 2000,
+                    2004, 2008, 2012, 2016, 2020, 2024)
+
+election_colors <- c(
+  "1980" = "#E63946",
+  "1984" = "#1D3557",
+  "1988" = "#F4A261",
+  "1992" = "#2A9D8F",
+  "1996" = "#A8DADC",
+  "2000" = "#E9C46A",
+  "2004" = "#264653",
+  "2008" = "#9B5DE5",
+  "2012" = "#F15BB5",
+  "2016" = "#00BBF9",
+  "2020" = "#00F5D4",
+  "2024" = "#FF8500"
+)
+
+# Prep data for direction plot
+ces_dir_plot <- ces_full |>
+  filter(!is.na(revision), !is.na(date)) |>
+  mutate(
+    is_election_year = year %in% election_years,
+    election_factor  = factor(year)
+  )
+
+# Thin + distinct colors
+p_dir <- ggplot() +
+  # background: all months in light grey, thin
+  geom_line(
+    data = ces_dir_plot,
+    aes(x = date, y = revision),
+    color = "grey80", linewidth = 0.2, alpha = 0.7
+  ) +
+  # election years: colored, slightly thicker
+  geom_line(
+    data = ces_dir_plot |> filter(is_election_year),
+    aes(x = date, y = revision, color = election_factor),
+    linewidth = 0.6
+  ) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.3) +
+  scale_color_manual(values = election_colors, name = "Election Year") +
+  labs(
+    title    = "Direction of CES Revisions (Signed Values)",
+    subtitle = "Election years highlighted — positive vs negative revisions",
+    x = "Year",
+    y = "Revision (Final - Original)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 12),
+    legend.text  = element_text(size = 10)
+  )
+
+ggplotly(p_dir)
+```
+
+In our plot from Task 3, 2024 doesn't really seem to stand out much from previous election years.
+
+
+## Claim 2: Stefanik (2024):
+“The Biden administration has been cooking the books — the jobs numbers keep getting revised down.” 
 
 
