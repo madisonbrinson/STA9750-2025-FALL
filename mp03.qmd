@@ -34,6 +34,7 @@ We download the data from the New York City Department of Planning to find our c
   library(sf)
   library(tidyverse)
   library(httr2)
+    
 
   # 1. Make sure the directory exists
   if (!dir.exists(dir_path)) {
@@ -301,6 +302,8 @@ trees_with_district <- st_join(
 ```
 
 ```{r}
+
+
 # 1) Count trees per council district
 trees_by_district <- trees_with_district |>
   st_drop_geometry() |>
