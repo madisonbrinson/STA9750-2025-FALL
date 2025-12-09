@@ -93,13 +93,8 @@ ces_levels <- ces_raw |>
     date <= as.Date("2025-07-01")
   ) |>
   tidyr::drop_na()
+ces_levels
 
-kable(
-  ces_levels,
-  head(10),
-  format  = "html",
-  caption = "Nonfarm Payroll Levels"
-)
 ```
 
 ## Downloading CES Revisions
