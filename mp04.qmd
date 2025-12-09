@@ -28,13 +28,12 @@ The key question we will address in our analysis is whether the recent revisions
 # Data Aquistion
 
 
-To begin our analysis we download the CES Estimates and the CES Revisions data sets directly from the Bureau of Labr Statistics. 
+To begin our analysis we download the CES Estimates and the CES Revisions data sets directly from the Bureau of Labor Statistics. 
 
 ## Downloading Final CES Estimates 
 
 
 ```{r}
-
 library(httr2)
 library(rvest)
 library(dplyr)
@@ -97,10 +96,10 @@ ces_levels <- ces_raw |>
 
 kable(
   ces_levels,
+  head(10),
   format  = "html",
   caption = "Nonfarm Payroll Levels"
 )
-
 ```
 
 ## Downloading CES Revisions
@@ -145,64 +144,33 @@ page_ces <- resp_ces |>
 # Returns: date, original, final, revision
 get_ces_revisions_year <- function(year, html_page = page_ces) {
 
-  heading_pattern <- sprintf(
-    "Nonfarm Payroll Employment: Revisions between over-the-month estimates, %d",
-    year
-  )
+  # 1. Grab the table for that year by its id, then just the tbody
+  tbl_raw <- html_page |>
+    rvest::html_element(sprintf("table#%s", year)) |>
+    rvest::html_element("tbody") |>
+    rvest::html_table(header = FALSE, fill = TRUE) |>
+    tibble::as_tibble()
 
-  # All tables after the heading
-  table_nodes <- html_page |>
-    rvest::html_elements(
-      xpath = sprintf("//*[contains(., '%s')][1]/following::table", heading_pattern)
-    )
-
-  if (length(table_nodes) == 0) {
-    stop("No tables found for year ", year)
-  }
-
-  # Pick the first table with at least 12 rows
-  tbl_raw <- NULL
-  for (node in table_nodes) {
-    tmp <- suppressWarnings(rvest::html_table(node, header = FALSE, fill = TRUE))
-    if (nrow(tmp) >= 12) {
-      tbl_raw <- tibble::as_tibble(tmp)
-      break
-    }
-  }
-
-  if (is.null(tbl_raw)) {
-    stop("No suitable (>= 12 rows) table found for year ", year)
-  }
-
-  # Clean: first 12 rows = Jan–Dec
+  # 2. First 12 body rows are Jan–Dec, columns 3 & 5 are 1st and 3rd estimates
   tbl_clean <- tbl_raw |>
     dplyr::slice(1:12) |>
     dplyr::select(
-      month    = 1,   # not used for date, but this is month name
-      original = 3,   # first estimate
-      final    = 5    # third estimate
+      month    = 1,  # "Jan.", "Feb.", etc. (not strictly needed)
+      original = 3,  # 1st estimate (SA)
+      final    = 5   # 3rd estimate (SA)
     ) |>
     dplyr::mutate(
-      #  month index
       month_index = dplyr::row_number(),
-
-      # Build date as "YYYY-MM-01" using the year argument
-      date = as.Date(sprintf("%d-%02d-01", year, month_index)),
-
-      # Clean numeric text: keep only digits and minus sign
-      original_str = stringr::str_replace_all(original, "[^0-9-]", ""),
-      final_str    = stringr::str_replace_all(final,    "[^0-9-]", ""),
-
-      # Convert to numeric with warnings suppressed
-      original = suppressWarnings(as.numeric(original_str)),
-      final    = suppressWarnings(as.numeric(final_str)),
-
-      revision = final - original
+      date        = as.Date(sprintf("%d-%02d-01", year, month_index)),
+      original    = as.numeric(gsub(",", "", original)),
+      final       = as.numeric(gsub(",", "", final)),
+      revision    = final - original
     ) |>
     dplyr::select(date, original, final, revision)
 
   tbl_clean
 }
+
 
 # apply to all years
 years_vec <- 1979:2025
@@ -219,6 +187,7 @@ ces_revisions <- ces_revisions_all |>
     date <= as.Date("2025-06-01")
   ) |>
   dplyr::arrange(date)
+ces_revisions
 
 
 
@@ -296,7 +265,7 @@ kable(
 
 ```
 
-The largest **positive** revision was in **December of 1984**. 
+The largest **positive** revision was in **November of 2021**. 
 
 
 ### When was the largest negative revision?
@@ -385,7 +354,7 @@ p_revisions
 
 ```
 
-This plot shows the revisions over time with a significant spike around 2021. This can potentially be explained by the BLS "catching up" to the changes that COVID caused in 2020.
+This plot shows the revisions over time with a significant spike around 2020 and 2021. This can potentially be explained by the BLS "catching up" to the changes that COVID caused in 2020.
 
 ## Year with the largest jump in typical revision size (median |revision| vs previous year)
 ```{r}
@@ -424,7 +393,7 @@ kable(
 
 ```
 
-2022 had the largest increase in typical revision size.
+2021 had the largest increase in typical revision size.
 
 ## Largest election year spike
 ```{r}
@@ -516,44 +485,9 @@ knitr::kable(
 ```
 
 
-```{r, fig.width=8, fig.height=8}
-library(ggplot2)
-
-ggplot(ces_full, aes(x = date, y = abs_revision,
-                     color = is_election_year)) +
-  geom_line(linewidth = 0.8) +
-  scale_color_manual(values = c("FALSE" = "gray60",
-                                "TRUE"  = "red")) +
-  labs(
-    title = "Magnitude of CES Revisions Over Time (Election Years Highlighted)",
-    subtitle = "Election years in red — shows magnitude spikes",
-    x = "Year",
-    y = "Absolute Revision",
-    color = "Election Year?"
-  ) +
-  theme_minimal(base_size = 14)
 
 
-```
 
-```{r}
-ggplot(ces_full, aes(x = date, y = revision,
-                     color = is_election_year)) +
-  geom_hline(yintercept = 0, linetype = "dashed") +
-  geom_line(linewidth = 0.8) +
-  scale_color_manual(values = c("FALSE" = "gray60",
-                                "TRUE"  = "blue")) +
-  labs(
-    title = "Signed CES Revisions (Election Years Highlighted)",
-    subtitle = "Shows whether revisions trended upward or downward",
-    x = "Year",
-    y = "Revision",
-    color = "Election Year?"
-  ) +
-  theme_minimal(base_size = 14)
-
-
-```
 
 ```{r}
 
@@ -1762,7 +1696,7 @@ kable(
 
 
 
-Using the data from Task 3, we see that the largest **downward** revision was in June of 2021 at 672,000 jobs which 1st of all was **not** in 2024 and was nowhere near a loss of 900,000 jobs. In the following visualization, notice the "spike" downward around the year 2021.
+Using the data from Task 3, we see that the largest **downward** revision was in June of 2020 at 672,000 jobs which 1st of all was **not** in 2024 and was nowhere near a loss of 900,000 jobs. In the following visualization, notice the "spike" downward around the year 2021.
 Covid was likely the driver of the huge negative revision in 2021.
 ```{r}
 p_revisions <- ces_full |>
@@ -1820,7 +1754,7 @@ knitr::kable(
 ```
 
 
-Compared to previous decades two decades, the 2020's do seem to have an unusually high frequency of monthly revisions at **18.18%** but do not have the highest frequency of monthly revisions. However, this discrepancy can probably mostly be accounted for by the huge spike in 2021. 
+Compared to previous decades two decades, the 2020's do seem to have an unusually high frequency of monthly revisions at **28.79%** but do not have the highest frequency of monthly revisions. However, this discrepancy can probably mostly be accounted for by the huge spike in 2021. 
 ```{r}
 library(ggplot2)
 library(scales)
@@ -1884,7 +1818,7 @@ knitr::kable(
 )
 
 ```
-We can see that in 2024, the most negative revision was *104,000* comparable to previous election years. 
+We can see that in 2024, the most negative revision was *97,000* comparable to previous election years. 
 
 ```{r}
 library(plotly)
@@ -1954,41 +1888,45 @@ ggplotly(p_dir)
 In our plot from Task 3, 2024 doesn't really seem to stand out much from previous election years.
 
 ```{r}
-ces_period <- ces_full |>
+pct_payroll_by_decade <- ces_full |>
   mutate(
-    period = case_when(
-      date >= as.Date("2024-01-01") &
-      date <= as.Date("2025-06-01") ~ "Post-2024 election",
-      TRUE ~ "Historical baseline"
-    )
-  )
-
-claim1_period_summary <- ces_period |>
-  group_by(period) |>
+    pct_of_payroll = abs(revision) / level
+  ) |>
+  group_by(decade) |>
   summarise(
-    `Total revision (thousands)` = sum(revision, na.rm = TRUE),
-    `Mean monthly revision (thousands)` = mean(revision, na.rm = TRUE),
-    `Median monthly revision (thousands)` = median(revision, na.rm = TRUE),
-    `Fraction of downward revisions` = mean(revision < 0, na.rm = TRUE),
-    `Number of months` = n(),
+    mean_pct_payroll   = mean(pct_of_payroll, na.rm = TRUE) * 100,
+    median_pct_payroll = median(pct_of_payroll, na.rm = TRUE) * 100,
+    max_pct_payroll    = max(pct_of_payroll, na.rm = TRUE) * 100,
+    n_months           = n(),
     .groups = "drop"
   ) |>
-  mutate(
-    `Total revision (thousands)` =
-      round(`Total revision (thousands)`, 1),
-    `Mean monthly revision (thousands)` =
-      round(`Mean monthly revision (thousands)`, 1),
-    `Median monthly revision (thousands)` =
-      round(`Median monthly revision (thousands)`, 1),
-    `Fraction of downward revisions` =
-      paste0(round(`Fraction of downward revisions` * 100, 1), "%")
+  arrange(decade)
+
+
+
+# Format table for presentation 
+
+pct_payroll_table <- pct_payroll_by_decade |>
+  transmute(
+    `Decade` = decade,
+
+    `Mean (% of payroll)` =
+      paste0(round(mean_pct_payroll, 3), "%"),
+
+    `Median (% of payroll)` =
+      paste0(round(median_pct_payroll, 3), "%"),
+
+    `Max (% of payroll)` =
+      paste0(round(max_pct_payroll, 3), "%"),
+
+    `Number of months` = n_months
   ) |>
   as.data.frame()
 
 knitr::kable(
-  claim1_period_summary,
+  pct_payroll_table,
   format  = "html",
-  caption = "Claim 1: Mean, Median, and Cumulative CES Revisions Post-Election vs Historical Baseline"
+  caption = "CES Revisions as a Percentage of Payroll, by Decade"
 )
 
 
@@ -2171,11 +2109,11 @@ prop_test_result <- ces_claim1_clean |>
 prop_test_result
 
 ```
-The p-value of the prop test is still less than .05 indicating that there is statistically significant difference in the probability of getting a downward revision in the post election period vs historical data.
+The p-value of the prop test is greater than .05 indicating that there is not statistically significant difference in the probability of getting a downward revision in the post election period vs historical data.
 
 
 ## Conclusions
-We are not able to reject the null hypothesis that downward revisions have increased in the post-election period. While correlation does not equal causation, the results of our 3 tests indicate that there is an increased probability of getting a downward revision in the post-election period. While there is no way to tell if this was because of political bias or outright manipulation by the BLS, there is a difference in historical downward revisions and post-election period downward revisions.
+We are not able to reject the null hypothesis that downward revisions have increased in the post-election period. While correlation does not equal causation, the results of 2 of our 3 tests indicate that there is an increased probability of getting a downward revision in the post-election period. While there is no way to tell if this was because of political bias or outright manipulation by the BLS, there is a difference in historical downward revisions and post-election period downward revisions.
 
 
 
@@ -2256,7 +2194,7 @@ knitr::kable(
 )
 ```
 
-The claim states that the BLS had been revising numbers down consistently under Biden-nominated BLS Commisioner McEntarfer, which would imply a long run of downward revisions. While we do see a run of 6 months in 2024, it doesn't stand out. There are historical patterns of long runs, some of more than 6 months so nothing seems particularly out of the ordinary for 2024.
+The claim states that the BLS had been revising numbers down consistently under Biden-nominated BLS Commisioner McEntarfer, which would imply a long run of downward revisions. We do not see 2024 appear on the table so it doesn't seem like there's anything out of the ordinary in 2024. There are historical patterns of long runs, some of more than 6 months so nothing seems particularly out of the ordinary for 2024.
 
 ```{r}
 ggplot(ces_full, aes(x = date, y = revision)) +
@@ -2369,7 +2307,7 @@ down_frac_2020 |>
 
 ```
 
-2024 does appear to have a higher than normal share of negative revisions so there is some evidence that appears to support something going on in 2024.
+2024 doesn't appear to have a higher than normal share of negative revisions so there is little evidence that appears to support something going on in 2024.
 
 ```{r}
 #annual averages 
@@ -2440,11 +2378,11 @@ knitr::kable(
 
 ```
 
-2024 only has one revision greater than 100k, so likely the revisions can just be attributed to normal data collection error and adjustment.
+2024 has no revisions greater than 100k, so likely the revisions can just be attributed to normal data collection error and adjustment.
 
 ## Tests
 
-In our earlier statistical analysis we tested whether or not large downward revision. The following table shows that there are more downward revisions during trumps presidency.
+In our earlier statistical analysis we tested whether or not large downward revision is more likely . The following table shows that there are more downward revisions during trumps presidency.
 
 
 ```{r}
@@ -2500,7 +2438,7 @@ kable(
 
 
 ```
-However, given the following p-value, there is not significant evidence that revisions under the Biden administration were larger or more negative than the Trump administration.
+However, given the following p-value, there is slightly significant evidence that revisions under the Biden administration were larger or more negative than the Trump administration.
 
 ```{r}
 t_test_era <- t.test(
@@ -2528,7 +2466,7 @@ kable(
 
 
 # Conclusions:
-There is no direct evidence that the Biden administration ever manipulated or falsified jobs reports. While yes there was an increase in revision during the post election period of **January 2024 to June of 2025, there is no evidence that the Biden administration purposefully altered jobs reports. 
+There is no direct evidence that the Biden administration ever manipulated or falsified jobs reports. While yes there was an increase in revision during the post election period of January 2024 to June of 2025, there is no evidence that the Biden administration purposefully altered jobs reports. 
 
 
 
