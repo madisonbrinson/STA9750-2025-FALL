@@ -1,5 +1,7 @@
 ---
 title: "Job Accessibility and Property Values in NYC: Did COVID-19 Reshape the Relationship?"
+author: "Madison Brinson"
+date: today
 format: 
   html:
     theme: pulse
@@ -19,7 +21,6 @@ execute:
 ---
 
 ```{r setup, include=FALSE}
-
 library(sf)
 library(dplyr)
 library(readr)
@@ -42,34 +43,33 @@ library(lubridate)
 
 options(tigris_use_cache = TRUE)
 if (!dir.exists("data")) dir.create("data", recursive = TRUE)
-
 ```
 
 # Introduction
 
 ## Connecting to the Overarching Question
 
-Our team's **Overarching Question (OQ)** asks: *Did COVID-19 reshape the relationship between neighborhood characteristics and property values across NYC's Community Districts?* This question matters because the pandemic fundamentally disrupted how Americans live, work, and value residential locations. Understanding these shifts has implications for urban planning, housing policy, and real estate investment decisions throughout New York City.
+Our team's **Overarching Question (OQ)** asked: *Did COVID-19 reshape the relationship between neighborhood characteristics and property values across NYC's Community Districts?* This question mattered because the pandemic fundamentally disrupted how Americans live, work, and value residential locations. Understanding these shifts has implications for urban planning, housing policy, and real estate investment decisions throughout New York City.
 
-My individual analysis focuses on one critical neighborhood characteristic: **job accessibility**—defined as the number of jobs within 1 kilometer of a neighborhood's centroid. This metric captures the traditional urban economics principle that proximity to employment centers commands a premium in housing markets. The pandemic's remote work revolution may have fundamentally weakened this long-standing relationship, as workers discovered they could perform their jobs from anywhere with an internet connection.
+This individual analysis focused on one critical neighborhood characteristic: **job accessibility**, defined as the number of jobs within 1 kilometer of a neighborhood's centroid. This metric captures the traditional urban economics principle that proximity to employment centers commands a premium in housing markets. The pandemic's remote work revolution may have fundamentally weakened this long-standing relationship, as workers discovered they could perform their jobs from anywhere with an internet connection.
 
 ## Specific Question
 
 **Did the relationship between job accessibility and property values change from pre-COVID (2017-2019) to post-COVID (2021-2023)?**
 
-I operationalize this question by calculating job accessibility for each of NYC's 59 Community Districts using LODES employment data, measuring median property sale prices from DOF Rolling Sales data, comparing the correlation between these measures across the two periods, and testing whether any observed change in correlation is statistically significant. The analysis excludes 2020 to create a clean comparison between the pre-pandemic baseline and the post-pandemic period when new work patterns had stabilized.
+This question was operationalized by calculating job accessibility for each of NYC's 59 Community Districts using LODES employment data, measuring median property sale prices from DOF Rolling Sales data, comparing the correlation between these measures across the two periods, and testing whether any observed change in correlation was statistically significant. The analysis excluded 2020 to create a clean comparison between the pre-pandemic baseline and the post-pandemic period when new work patterns had stabilized.
 
 ## Hypotheses
 
-Based on the remote work hypothesis, I expect: (H1) the positive correlation between job accessibility and property values weakened post-COVID; (H2) this weakening was more pronounced in Manhattan than outer boroughs due to its concentration of remote-capable white-collar jobs in finance, technology, and professional services; and (H3) neighborhoods with lower pre-COVID job accessibility experienced relatively higher price growth as location flexibility increased and workers could choose neighborhoods based on amenities rather than commute times.
+Based on the remote work hypothesis, the expected findings were: (H1) the positive correlation between job accessibility and property values weakened post-COVID; (H2) this weakening was more pronounced in Manhattan than outer boroughs due to its concentration of remote-capable white-collar jobs in finance, technology, and professional services; and (H3) neighborhoods with lower pre-COVID job accessibility experienced relatively higher price growth as location flexibility increased and workers could choose neighborhoods based on amenities rather than commute times.
 
-The theoretical mechanism underlying these hypotheses is straightforward. Before the pandemic, workers faced a fundamental tradeoff between housing costs and commute times. Living near job centers meant shorter commutes but higher rents; living farther away saved money but imposed time costs. This tradeoff generated the classic bid-rent gradient where land prices decline with distance from employment centers. Remote work disrupts this equilibrium by reducing or eliminating commute costs, potentially flattening the bid-rent gradient and reducing the premium for job-accessible locations.
+These hypotheses were formed from the bid-rent model in urban economics. Before the pandemic, workers faced a fundamental tradeoff between housing costs and commute times. Living near job centers meant shorter commutes but higher rents; living farther away saved money but imposed time costs. This tradeoff generated the classic bid-rent gradient where land prices decline with distance from employment centers. Remote work disrupts this equilibrium by reducing or eliminating commute costs, potentially flattening the bid-rent gradient and reducing the premium for job-accessible locations.
 
 # Data Acquisition
 
-I acquire data from multiple sources using programmatic methods to ensure reproducibility. All functions implement caching to avoid repeated API calls and enable others to reproduce this analysis without redundant downloads. The data sources span multiple government agencies and require different access methods including REST APIs, web scraping, and paginated queries. This diversity of data sources demonstrates the complexity of urban economic analysis and the importance of integrating information across administrative boundaries.
+Data was acquired from multiple sources using programmatic methods to ensure reproducibility. All functions implemented caching to avoid repeated API calls and enable others to reproduce this analysis without redundant downloads. The data sources spanned multiple government agencies and required different access methods including REST APIs, web scraping, and paginated queries.
 
-The primary data sources include: NYC Community District boundaries from the NYC Open Data portal; PLUTO parcel data linking properties to administrative geographies; DOF Rolling Sales providing transaction-level price data; LODES employment statistics from the Census Bureau enabling job counts at the census block level; and ZIP Code Business Patterns for estimating recent employment trends. Together, these datasets enable a comprehensive analysis of the job accessibility-property value relationship across NYC's 59 Community Districts.
+The primary data sources included: NYC Community District boundaries from the NYC Open Data portal; PLUTO parcel data linking properties to administrative geographies; DOF Rolling Sales providing transaction-level price data; LODES employment statistics from the Census Bureau enabling job counts at the census block level; ZIP Code Business Patterns for estimating recent employment trends; and ACS demographic data providing neighborhood context.
 
 ## Community District Shapes (NYC Open Data API)
 
@@ -82,8 +82,11 @@ get_cd_shapes <- function(dir_path = "data") {
   geojson_file <- file.path(dir_path, "cd_shapes.geojson")
   
   if (file.exists(fname)) {
+    message("Using cached CD shapes: ", fname)
     return(readRDS(fname))
   }
+  
+  message("Downloading Community Districts from NYC ArcGIS API...")
   
   tryCatch({
     req <- request("https://services5.arcgis.com/GfwWNkhOj9bNBqoJ/arcgis/rest/services/NYC_Community_Districts/FeatureServer/0/query") |>
@@ -98,6 +101,7 @@ get_cd_shapes <- function(dir_path = "data") {
     resp <- req_perform(req)
     
     writeLines(resp_body_string(resp), geojson_file)
+    message("Saved GeoJSON to: ", geojson_file)
     
     cd_shapes <- st_read(geojson_file, quiet = TRUE)
     
@@ -106,6 +110,7 @@ get_cd_shapes <- function(dir_path = "data") {
     cd_shapes
     
   }, error = function(e) {
+    message("ERROR downloading CD shapes: ", e$message)
     stop(e)
   })
 }
@@ -123,8 +128,11 @@ get_pluto <- function(dir_path = "data", limit = 50000) {
   final_file <- file.path(dir_path, "pluto_raw.rds")
   
   if (file.exists(final_file)) {
+    message("Using cached PLUTO data: ", final_file)
     return(readRDS(final_file))
   }
+  
+  message("Downloading PLUTO from NYC Open Data API...")
   
   base_url <- "https://data.cityofnewyork.us/resource/64uk-42ks.json"
   
@@ -136,6 +144,8 @@ get_pluto <- function(dir_path = "data", limit = 50000) {
     chunk_file <- file.path(dir_path, sprintf("pluto_chunk_%05d.json", chunk_index))
     
     if (!file.exists(chunk_file)) {
+      message("Downloading chunk ", chunk_index, " | offset = ", format(offset, big.mark = ","))
+      
       tryCatch({
         req <- request(base_url) |>
           req_url_query(`$limit` = limit, `$offset` = offset) |>
@@ -146,19 +156,31 @@ get_pluto <- function(dir_path = "data", limit = 50000) {
         Sys.sleep(1)
         
       }, error = function(e) {
+        message("ERROR downloading chunk ", chunk_index, ": ", e$message)
         stop(e)
       })
+      
+    } else {
+      message("Using cached chunk ", chunk_index)
     }
     
-    chunk_data <- fromJSON(chunk_file)
+    chunk_data <- tryCatch({
+      fromJSON(chunk_file)
+    }, error = function(e) {
+      message("ERROR reading chunk ", chunk_index, ": ", e$message)
+      stop(e)
+    })
     
     if (length(chunk_data) == 0 || nrow(chunk_data) == 0) {
+      message("No more data; stopping.")
       break
     }
     
+    message("  Rows in chunk: ", format(nrow(chunk_data), big.mark = ","))
     all_chunks[[chunk_index]] <- chunk_data
     
     if (nrow(chunk_data) < limit) {
+      message("Last partial batch; stopping.")
       break
     }
     
@@ -166,6 +188,7 @@ get_pluto <- function(dir_path = "data", limit = 50000) {
     chunk_index <- chunk_index + 1
   }
   
+  message("Combining all chunks...")
   pluto_raw <- bind_rows(all_chunks)
   saveRDS(pluto_raw, final_file)
   
@@ -187,14 +210,19 @@ get_dof_sales <- function(years = c(2017, 2018, 2019, 2021, 2022, 2023),
   final_file <- file.path(dir_path, "sales_raw.rds")
   
   if (file.exists(final_file)) {
+    message("Using cached sales data: ", final_file)
     return(readRDS(final_file))
   }
+  
+  message("Downloading DOF Annualized Sales from NYC Open Data API...")
   
   base_url <- "https://data.cityofnewyork.us/resource/w2pb-icbu.json"
   
   all_sales <- list()
   
   for (yr in years) {
+    message("Year: ", yr)
+    
     offset <- 0
     chunk_index <- 1
     year_chunks <- list()
@@ -203,6 +231,8 @@ get_dof_sales <- function(years = c(2017, 2018, 2019, 2021, 2022, 2023),
       chunk_file <- file.path(dir_path, sprintf("sales_%d_chunk_%03d.json", yr, chunk_index))
       
       if (!file.exists(chunk_file)) {
+        message("  Downloading chunk ", chunk_index, " | offset = ", format(offset, big.mark = ","))
+        
         tryCatch({
           req <- request(base_url) |>
             req_url_query(
@@ -217,16 +247,27 @@ get_dof_sales <- function(years = c(2017, 2018, 2019, 2021, 2022, 2023),
           Sys.sleep(1)
           
         }, error = function(e) {
+          message("  ERROR downloading chunk ", chunk_index, " for year ", yr, ": ", e$message)
           stop(e)
         })
+        
+      } else {
+        message("  Using cached chunk ", chunk_index)
       }
       
-      chunk_data <- fromJSON(chunk_file)
+      chunk_data <- tryCatch({
+        fromJSON(chunk_file)
+      }, error = function(e) {
+        message("  ERROR reading chunk ", chunk_index, ": ", e$message)
+        stop(e)
+      })
       
       if (length(chunk_data) == 0 || nrow(chunk_data) == 0) {
+        message("  No more data for ", yr)
         break
       }
       
+      message("    Rows: ", format(nrow(chunk_data), big.mark = ","))
       year_chunks[[chunk_index]] <- chunk_data
       
       if (nrow(chunk_data) < limit) break
@@ -237,9 +278,11 @@ get_dof_sales <- function(years = c(2017, 2018, 2019, 2021, 2022, 2023),
     
     if (length(year_chunks) > 0) {
       all_sales[[as.character(yr)]] <- bind_rows(year_chunks)
+      message("  Total for ", yr, ": ", format(nrow(all_sales[[as.character(yr)]]), big.mark = ","), " rows")
     }
   }
   
+  message("Combining all years...")
   sales_raw <- bind_rows(all_sales)
   saveRDS(sales_raw, final_file)
   
@@ -258,6 +301,8 @@ get_lodes_wac <- function(years = 2017:2022, dir_path = "data") {
   
   base_url <- "https://lehd.ces.census.gov/data/lodes/LODES8/ny/wac/"
   
+  message("Scraping LODES directory listing...")
+  
   tryCatch({
     req <- request(base_url) |>
       req_headers("User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
@@ -271,7 +316,10 @@ get_lodes_wac <- function(years = 2017:2022, dir_path = "data") {
     
     available_files <- all_links[!is.na(all_links) & str_detect(all_links, "ny_wac_S000_JT00_\\d{4}\\.csv\\.gz")]
     
+    message("Found ", length(available_files), " WAC files on server")
+    
   }, error = function(e) {
+    message("ERROR scraping directory: ", e$message)
     stop(e)
   })
   
@@ -283,21 +331,28 @@ get_lodes_wac <- function(years = 2017:2022, dir_path = "data") {
     file_url <- paste0(base_url, expected_file)
     
     if (!expected_file %in% available_files) {
+      message("WARNING: File not available on server: ", expected_file)
       next
     }
     
-    if (!file.exists(fname)) {
+    if (file.exists(fname)) {
+      message("Using cached: ", yr)
+    } else {
+      message("Downloading: ", yr)
       tryCatch({
         download.file(file_url, destfile = fname, mode = "wb", quiet = TRUE)
         Sys.sleep(1)
       }, error = function(e) {
+        message("ERROR downloading ", yr, ": ", e$message)
         next
       })
     }
     
+    message("  Reading: ", yr)
     df <- read_csv(fname, show_col_types = FALSE) |>
       mutate(year = yr)
     
+    message("  Rows: ", format(nrow(df), big.mark = ","))
     all_years[[as.character(yr)]] <- df
   }
   
@@ -319,15 +374,20 @@ get_census_blocks <- function(dir_path = "data", batch_size = 500) {
   fname <- file.path(dir_path, "nyc_blocks.rds")
   
   if (file.exists(fname)) {
+    message("Using cached census blocks: ", fname)
     return(readRDS(fname))
   }
   
+  message("Downloading NYC Census Blocks from TIGERweb API...")
+  
   counties <- c("005", "047", "061", "081", "085")
+  county_names <- c("Bronx", "Kings", "Manhattan", "Queens", "Staten Island")
   
   all_blocks <- list()
   
   for (i in seq_along(counties)) {
     county <- counties[i]
+    message("  County: ", county_names[i], " (FIPS ", county, ")")
     
     offset <- 0
     chunk_index <- 1
@@ -337,6 +397,8 @@ get_census_blocks <- function(dir_path = "data", batch_size = 500) {
       chunk_file <- file.path(dir_path, sprintf("blocks_%s_chunk_%03d.geojson", county, chunk_index))
       
       if (!file.exists(chunk_file)) {
+        message("    Chunk ", chunk_index, " | offset = ", offset)
+        
         tryCatch({
           req <- request("https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/tigerWMS_Census2020/MapServer/10/query") |>
             req_url_query(
@@ -353,6 +415,7 @@ get_census_blocks <- function(dir_path = "data", batch_size = 500) {
           response_text <- resp_body_string(resp)
           
           if (!grepl("FeatureCollection", response_text)) {
+            message("      ERROR: Invalid response - ", substr(response_text, 1, 200))
             stop("Invalid GeoJSON")
           }
           
@@ -360,12 +423,16 @@ get_census_blocks <- function(dir_path = "data", batch_size = 500) {
           Sys.sleep(0.5)
           
         }, error = function(e) {
+          message("      ERROR: ", e$message)
           stop(e)
         })
+      } else {
+        message("    Chunk ", chunk_index, " (cached)")
       }
       
       blocks_chunk <- st_read(chunk_file, quiet = TRUE)
       n_rows <- nrow(blocks_chunk)
+      message("      Rows: ", n_rows)
       
       county_blocks[[chunk_index]] <- blocks_chunk
       
@@ -376,6 +443,7 @@ get_census_blocks <- function(dir_path = "data", batch_size = 500) {
     }
     
     all_blocks[[county]] <- bind_rows(county_blocks)
+    message("  Total for ", county_names[i], ": ", nrow(all_blocks[[county]]))
   }
   
   nyc_blocks <- bind_rows(all_blocks)
@@ -397,12 +465,17 @@ get_zbp_data <- function(years = c(2022, 2023), dir_path = "data") {
   all_data <- list()
   
   for (yr in years) {
+    message("ZBP year: ", yr)
+    
     cache_file <- file.path(dir_path, sprintf("zbp_%d.rds", yr))
     
     if (file.exists(cache_file)) {
+      message("  Using cached: ", cache_file)
       all_data[[as.character(yr)]] <- readRDS(cache_file)
       next
     }
+    
+    message("  Downloading from Census API...")
     
     api_url <- sprintf("https://api.census.gov/data/%d/cbp", yr)
     
@@ -431,12 +504,15 @@ get_zbp_data <- function(years = c(2022, 2023), dir_path = "data") {
         ) |>
         select(zip, est, emp, year)
       
+      message("  Rows: ", format(nrow(df), big.mark = ","))
+      
       saveRDS(df, cache_file)
       all_data[[as.character(yr)]] <- df
       
       Sys.sleep(1)
       
     }, error = function(e) {
+      message("  ERROR: ", e$message)
       stop(e)
     })
   }
@@ -459,15 +535,20 @@ get_acs_data <- function(dir_path = "data") {
   fname <- file.path(dir_path, "acs_raw.rds")
   
   if (file.exists(fname)) {
+    message("Using cached ACS data: ", fname)
     return(readRDS(fname))
   }
   
+  message("Downloading ACS data from Census Bureau API...")
+  
   counties <- c("005", "047", "061", "081", "085")
+  county_names <- c("Bronx", "Kings", "Manhattan", "Queens", "Staten Island")
   
   all_tracts <- list()
   
   for (i in seq_along(counties)) {
     county <- counties[i]
+    message("  Downloading: ", county_names[i], " (FIPS ", county, ")")
     
     tryCatch({
       req <- request("https://api.census.gov/data/2019/acs/acs5") |>
@@ -494,11 +575,13 @@ get_acs_data <- function(dir_path = "data") {
         ) |>
         select(GEOID, NAME, pop, housing_units, median_income)
       
+      message("    Rows: ", nrow(df))
       all_tracts[[county]] <- df
       
       Sys.sleep(1)
       
     }, error = function(e) {
+      message("  ERROR for county ", county, ": ", e$message)
       stop(e)
     })
   }
@@ -687,9 +770,7 @@ sales_with_cd <- sales_geo |>
 
 # Exploratory Data Analysis
 
-Before testing my hypotheses formally, I conducted exploratory analysis to understand patterns in the data and identify potential confounders. This exploration revealed several important features of NYC's employment and housing markets that inform the subsequent analysis. Understanding these baseline patterns is essential for interpreting the regression results and ensuring that observed correlations reflect meaningful economic relationships rather than artifacts of data quality issues or compositional changes.
-
-The exploratory analysis proceeds in three stages. First, I examine aggregate summary statistics to understand the scale of employment and sales activity in each period. Second, I disaggregate by borough to identify geographic heterogeneity that might confound city-wide estimates. Third, I visualize the distribution of property prices to assess whether the comparison of medians is appropriate given potential shifts in the composition of sales.
+Before testing the hypotheses formally, exploratory analysis was conducted to understand patterns in the data and identify potential issues.
 
 ## Summary Statistics
 
@@ -705,6 +786,8 @@ jobs_summary |>
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
 ```
 
+This table provided a sense of scale for the analysis. The pre-COVID period had slightly more total jobs than post-COVID, reflecting the pandemic's impact on NYC's labor market. However, this citywide view masked important geographic variation explored below.
+
 ```{r}
 sales_summary <- sales_with_cd |>
   mutate(Period = ifelse(period == "pre", "Pre-COVID", "Post-COVID")) |>
@@ -716,6 +799,38 @@ sales_summary |>
   kbl(caption = "Property Sales Summary by Period") |>
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
 ```
+
+The sales data showed substantial price appreciation between periods, with median prices rising from $660,000 to $800,000 (over 21% growth). This meant prices increased nearly everywhere, so the key question was whether price growth varied systematically with job accessibility.
+
+## Neighborhood Demographics (ACS)
+
+```{r}
+acs_borough <- acs_clean |>
+  mutate(
+    county = substr(GEOID, 3, 5),
+    borough = case_when(
+      county == "005" ~ "Bronx",
+      county == "047" ~ "Brooklyn",
+      county == "061" ~ "Manhattan",
+      county == "081" ~ "Queens",
+      county == "085" ~ "Staten Island"
+    )
+  ) |>
+  group_by(borough) |>
+  summarise(
+    `Population` = sum(pop, na.rm = TRUE),
+    `Housing Units` = sum(housing_units, na.rm = TRUE),
+    `Median Income` = dollar(median(median_income, na.rm = TRUE)),
+    `Census Tracts` = n(),
+    .groups = "drop"
+  )
+
+acs_borough |>
+  kbl(caption = "Demographic Context by Borough (ACS 2019)", format.args = list(big.mark = ",")) |>
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+ACS data provided demographic context for each borough. Manhattan had the highest median income but a smaller population since it functions more as a commercial center. Brooklyn and Queens had the largest populations. These differences helped explain why the job-price relationship might differ across boroughs.
 
 ## Jobs by Borough
 
@@ -741,7 +856,7 @@ jobs_by_borough |>
   row_spec(which(jobs_by_borough$borough == "Manhattan"), bold = TRUE, background = "#fff3cd")
 ```
 
-The employment data reveals that Manhattan experienced the largest job losses across all boroughs. This finding aligns with the remote work hypothesis, as Manhattan's economy is heavily concentrated in finance, professional services, and information technology—precisely the sectors most amenable to remote work arrangements. The outer boroughs, with more diverse economies including healthcare, retail, logistics, and manufacturing that typically require physical presence, showed more modest employment declines. This geographic heterogeneity in job losses provides an important natural experiment for testing whether areas with greater employment disruption experienced different property value trajectories.
+This table revealed a striking pattern: Manhattan was the only borough that lost jobs (-6.7%), while all outer boroughs gained jobs. Staten Island led with 12.1% growth, followed by Brooklyn at 7.9%. This aligned with the remote work hypothesis since Manhattan has a high concentration of finance and tech jobs that can be done remotely, while outer boroughs have more healthcare, retail, and logistics jobs requiring physical presence.
 
 ## Price Distribution by Borough
 
@@ -769,13 +884,13 @@ sales_with_cd |>
   theme(legend.position = "bottom", strip.text = element_text(face = "bold"))
 ```
 
+The density plots showed that prices shifted upward in every borough after COVID. The red distributions (post-COVID) were pushed to the right of the blue ones (pre-COVID) across the board. Even Manhattan, which lost jobs, saw prices increase. This suggested that factors beyond local employment, such as low interest rates or migration patterns, were driving the post-pandemic housing boom.
+
 # Analysis
 
-With the data cleaned and explored, I now turn to formally testing my hypotheses about the job accessibility-property value relationship. The analysis proceeds in several stages designed to provide increasingly rigorous evidence about whether and how the pandemic altered this fundamental urban economic relationship.
+With the data cleaned and explored, formal hypothesis testing was conducted to determine whether the job-price relationship changed after COVID.
 
-First, I calculate job accessibility for each Community District using two complementary methods: property-level proximity measures and CD centroid-based measures. The property-level approach captures the job accessibility experienced by actual transacting properties, while the centroid approach provides a stable reference point that is not affected by compositional changes in which properties sell.
-
-Second, I compute simple correlations between job accessibility and median prices for each period, testing whether both remain statistically significant and comparing their magnitudes. Third, I apply Fisher's Z-test to formally assess whether the change in correlation is statistically significant. Fourth, I estimate a difference-in-differences regression that directly tests for an interaction between job accessibility and the post-COVID period. Finally, I examine heterogeneity between Manhattan and outer boroughs to test hypothesis H2.
+Two approaches were used to measure job accessibility: one based on actual property locations and one based on CD centroids. The centroid approach provided a more stable measure not affected by which specific properties happened to sell in each period.
 
 ## Job Accessibility Calculation
 
@@ -882,6 +997,8 @@ tibble(
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
 ```
 
+This was the main test for H1. Both periods showed strong positive correlations (r = 0.630 pre-COVID and r = 0.618 post-COVID), and both were highly significant with p-values well below 0.05. The key finding was that the correlation barely changed, going from 0.630 to 0.618. Neighborhoods with more jobs nearby still commanded higher prices after COVID, just as they did before.
+
 ## Fisher's Z-Test
 
 ```{r}
@@ -901,6 +1018,8 @@ tibble(
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
 ```
 
+Fisher's Z-test formally tested whether the small drop in correlation was statistically meaningful. The p-value was 0.92, well above the 0.05 threshold, meaning the null hypothesis (that the two correlations are equal) could not be rejected. The tiny change from r = 0.63 to r = 0.62 was within normal sampling variability. This did not support hypothesis H1.
+
 ## Manhattan vs Outer Boroughs
 
 ```{r}
@@ -919,6 +1038,8 @@ tibble(
   kbl(caption = "Correlation Changes: Manhattan vs Outer Boroughs") |>
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
 ```
+
+This table tested H2, which predicted that the job-price relationship would weaken more in Manhattan than the outer boroughs. The results showed the opposite: the correlation actually strengthened in both Manhattan (+0.045) and the outer boroughs (+0.036). Instead of job accessibility becoming less important, it became slightly more important after COVID. This directly contradicted H2. One possible explanation is that as remote work reduced commuting frequency, people valued being near job centers for occasional office days or for the amenities that cluster around employment hubs.
 
 ## Difference-in-Differences Regression
 
@@ -941,6 +1062,8 @@ broom::tidy(model_did) |>
   kbl(caption = "Difference-in-Differences Regression Results") |>
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
 ```
+
+The difference-in-differences regression provided another way to test whether the job-price relationship changed. The interaction term "Jobs × Post" was the key coefficient, measuring whether the effect of job accessibility on prices differed between periods. The coefficient was essentially zero (0.028) with a p-value of 0.95, well above 0.05. This meant the null hypothesis (that the relationship did not change) could not be rejected. The "Jobs within 1km" coefficient showed that each additional nearby job was associated with about $1.88 higher property value pre-COVID, and that relationship remained unchanged post-COVID.
 
 ## Price Growth by Accessibility Level
 
@@ -968,11 +1091,9 @@ ggplot(access_summary, aes(x = access_label, y = avg_price_change_pct, fill = ac
   ylim(0, max(access_summary$avg_price_change_pct, na.rm = TRUE) * 1.15)
 ```
 
+This was the one hypothesis that received support. Neighborhoods were split into terciles based on pre-COVID job accessibility, then average price growth was compared across groups. Low-accessibility neighborhoods had the highest price growth, followed by medium, then high. This supported H3: even though the overall correlation between job accessibility levels and price levels remained stable, neighborhoods farther from jobs saw larger percentage price increases. Remote work may have made it easier for buyers to consider locations that were previously less desirable due to long commutes.
+
 # Visualizations
-
-The interactive visualizations below allow for detailed exploration of geographic patterns in job accessibility and property value changes. These maps reveal that the aggregate statistics mask considerable spatial heterogeneity, with distinct clusters of community districts showing divergent trajectories. Understanding this heterogeneity is crucial for policy makers who must target interventions to specific neighborhoods rather than applying blanket city-wide policies.
-
-The first map allows users to toggle between pre-COVID and post-COVID periods to observe how both job accessibility and median prices evolved across community districts. The second map categorizes each district into one of four quadrants based on whether jobs and prices increased or decreased, highlighting areas where the traditional job-price relationship appears to have broken down.
 
 ## Interactive Map: Pre vs Post COVID Prices
 
@@ -1003,6 +1124,8 @@ leaflet(cd_map) |>
   setView(lng = -73.95, lat = 40.7, zoom = 10)
 ```
 
+This map allowed exploration of how prices changed across different neighborhoods. Toggling between pre and post-COVID shows the shift. Hovering over any district displays the details. Although prices increased nearly everywhere, the relative ranking of neighborhoods remained stable: expensive areas before COVID were still expensive after.
+
 ## Scatter Plot: Job Accessibility vs Median Price
 
 ```{r}
@@ -1021,6 +1144,8 @@ plot_ly() |>
   layout(title = "Job Accessibility vs Property Values (Pre vs Post COVID)",
          xaxis = list(title = "Average Jobs within 1km"), yaxis = list(title = "Median Sale Price ($)", tickformat = "$,"))
 ```
+
+This scatter plot displayed both periods side by side. The blue dots (pre-COVID) and red dots (post-COVID) followed similar patterns, with strong positive relationships between jobs and prices in both periods. The red dots were generally shifted upward since prices increased everywhere, but the slope of the relationship appeared unchanged.
 
 ## Bivariate Map: Job Change vs Price Change
 
@@ -1044,6 +1169,8 @@ leaflet(cd_map) |>
   setView(lng = -73.95, lat = 40.7, zoom = 10)
 ```
 
+This map categorized neighborhoods by whether jobs and prices both increased, both decreased, or moved in opposite directions. The purple areas ("Jobs Down / Price Up") represented neighborhoods that lost jobs but still saw prices increase. Much of Manhattan fell into this category. Normally, fewer jobs would be expected to lead to lower prices, but that did not happen here. This suggested that factors other than local job accessibility were driving prices.
+
 ## Job Change vs Price Change
 
 ```{r}
@@ -1063,28 +1190,28 @@ ggplot(cd_analysis, aes(x = job_change_pct, y = price_change_pct, color = boroug
   theme_minimal(base_size = 12) + theme(legend.position = "bottom")
 ```
 
+This plot examined whether neighborhoods that gained or lost jobs saw corresponding price changes. The trend line was nearly flat, indicating that changes in job accessibility did not strongly predict price changes. Manhattan neighborhoods (on the left side, since they lost jobs) showed widely varying price outcomes. This reinforced the finding that local job changes were not the main driver of post-COVID price movements.
+
 # Conclusion
 
 ## Summary of Findings
 
-This analysis examined whether COVID-19 reshaped the relationship between job accessibility and property values across NYC's 59 Community Districts. Using data from LODES employment statistics, DOF property sales, and Census geography, I tested three hypotheses about how remote work may have affected housing markets.
+This analysis examined whether COVID-19 changed the relationship between job accessibility and property values across NYC's 59 Community Districts. Three hypotheses were tested using LODES employment data, DOF sales data, and Census geography.
 
-**Finding 1: The job-price correlation remained positive but showed modest weakening.** The correlation between job accessibility and median property values decreased from r = `r round(cor_pre$estimate, 2)` pre-COVID to r = `r round(cor_post$estimate, 2)` post-COVID. Fisher's Z-test yields p = `r round(p_fisher, 3)`, `r ifelse(p_fisher < 0.05, "indicating statistical significance", "suggesting this change is not statistically significant at conventional levels")`. The persistence of a positive correlation indicates that job accessibility remains a valued neighborhood characteristic.
+**Finding 1: The job-price correlation stayed stable (H1 not supported).** The correlation went from r = 0.63 before COVID to r = 0.62 after. Fisher's Z-test produced a p-value of 0.92, well above 0.05, so the null hypothesis that the correlations are equal could not be rejected. Neighborhoods near jobs still commanded higher prices after COVID, just as before.
 
-**Finding 2: Geographic heterogeneity between Manhattan and outer boroughs.** Manhattan and outer boroughs showed different patterns in how the job-price relationship evolved. The difference-in-differences regression tests whether the interaction between job accessibility and post-COVID timing is significant, providing additional insight into heterogeneous effects across the city.
+**Finding 2: Manhattan and outer boroughs both showed stronger correlations (H2 not supported).** The expectation was that Manhattan would show a greater weakening of the job-price relationship since it has more remote-work-friendly jobs. Instead, both Manhattan (+0.045) and the outer boroughs (+0.036) showed slightly stronger correlations after COVID. The difference-in-differences regression confirmed this: the interaction term had a p-value of 0.95, so the null hypothesis of no change could not be rejected.
 
-**Finding 3: Inverse relationship between accessibility and price growth.** Neighborhoods with lower pre-COVID job accessibility experienced higher percentage price growth post-COVID, consistent with hypothesis H3 and the remote work narrative. This pattern suggests that location flexibility may have reduced the premium commanded by high-accessibility neighborhoods.
+**Finding 3: Low-accessibility neighborhoods had higher price growth (H3 supported).** When neighborhoods were grouped by pre-COVID job accessibility, the low-accessibility group had the highest percentage price growth. This supported H3 and suggested that remote work may have made it easier for buyers to move to areas previously considered too far from jobs.
 
 ## Contribution to Overarching Question
 
-This analysis directly addresses our team's overarching question—*Did COVID-19 reshape the relationship between neighborhood characteristics and property values across NYC's Community Districts?*—by demonstrating that job accessibility showed a modestly weakened relationship with property values after the pandemic. The finding that low-accessibility neighborhoods experienced above-average price growth suggests that residents may be trading off commute convenience for other amenities when remote work makes daily office attendance unnecessary. Combined with teammates' analyses of other neighborhood characteristics, these findings collectively illuminate how COVID-19 reshaped the determinants of NYC property values.
+This analysis helped answer our team's overarching question about whether COVID-19 reshaped the relationship between neighborhood characteristics and property values. For job accessibility specifically, the answer was nuanced. The basic relationship, where neighborhoods near jobs have higher prices, remained remarkably stable. However, the pattern of price growth did shift toward lower-accessibility areas. COVID-19 may have expanded the set of neighborhoods buyers would consider, even if it did not eliminate the premium for being near jobs.
 
 ## Limitations
 
-Several limitations merit consideration when interpreting these results. First, the community district level of analysis may mask important within-neighborhood variation; a property-level analysis could reveal stronger or different effects. Second, the 2023 employment estimate relies on ZIP Code Business Patterns growth rate projections rather than actual LODES data, introducing potential measurement error. Third, selection effects in which properties sold during each period could confound price comparisons if, for example, luxury properties were more likely to transact post-COVID. Fourth, omitted variables such as changes in crime rates, school quality, transit access, or neighborhood amenities may explain observed patterns independently of remote work effects.
-
-Future research could extend this analysis in several productive directions. Incorporating property-level job accessibility measures rather than CD-level aggregates would provide more precise estimates of the relationship. Modeling price trajectories using panel data methods rather than comparing period averages would capture dynamics within each period. Explicitly controlling for contemporaneous neighborhood changes through additional data sources would help isolate the remote work mechanism from confounding factors. Finally, examining heterogeneity by property type—distinguishing apartments from single-family homes, or new construction from existing stock—could reveal whether the job accessibility premium changed differently across housing submarkets.
+Several considerations should be kept in mind when interpreting these results. First, analyzing at the community district level may hide variation within neighborhoods; a property-level analysis could reveal different patterns. Second, 2023 employment had to be estimated using ZIP Code Business Patterns growth rates since actual LODES data was not yet available. Third, the mix of properties that sold may have differed between periods, which could affect price comparisons. Finally, other factors that changed during COVID, such as crime rates, school quality, and transit access, might explain some of the observed patterns.
 
 ---
 
-*This report uses reproducible research practices with all data acquired programmatically via APIs and web scraping.*
+*This report used reproducible research practices with all data acquired programmatically via APIs and web scraping.*
