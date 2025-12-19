@@ -1,7 +1,5 @@
 ---
 title: "Job Accessibility and Property Values in NYC: Did COVID-19 Reshape the Relationship?"
-author: "Madison Brinson"
-date: today
 format: 
   html:
     theme: pulse
@@ -21,7 +19,6 @@ execute:
 ---
 
 ```{r setup, include=FALSE}
-
 library(sf)
 library(dplyr)
 library(readr)
@@ -64,7 +61,7 @@ This question was operationalized by calculating job accessibility for each of N
 
 Based on the remote work hypothesis, the expected findings were: (H1) the positive correlation between job accessibility and property values weakened post-COVID; (H2) this weakening was more pronounced in Manhattan than outer boroughs due to its concentration of remote-capable white-collar jobs in finance, technology, and professional services; and (H3) neighborhoods with lower pre-COVID job accessibility experienced relatively higher price growth as location flexibility increased and workers could choose neighborhoods based on amenities rather than commute times.
 
-These hypotheses were formed from the bid-rent model in urban economics. Before the pandemic, workers faced a fundamental tradeoff between housing costs and commute times. Living near job centers meant shorter commutes but higher rents; living farther away saved money but imposed time costs. This tradeoff generated the classic bid-rent gradient where land prices decline with distance from employment centers. Remote work disrupts this equilibrium by reducing or eliminating commute costs, potentially flattening the bid-rent gradient and reducing the premium for job-accessible locations.
+These hypotheses were grounded in the bid-rent model from urban economics. Before the pandemic, workers faced a fundamental tradeoff between housing costs and commute times. Living near job centers meant shorter commutes but higher rents; living farther away saved money but imposed time costs. This tradeoff generated the classic bid-rent gradient where land prices decline with distance from employment centers. Remote work disrupts this equilibrium by reducing or eliminating commute costs, potentially flattening the bid-rent gradient and reducing the premium for job-accessible locations.
 
 # Data Acquisition
 
@@ -787,7 +784,7 @@ jobs_summary |>
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
 ```
 
-This table provided a sense of scale for the analysis. The pre-COVID period had slightly more total jobs than post-COVID, reflecting the pandemic's impact on NYC's labor market. However, this citywide view masked important geographic variation explored below.
+The employment summary provides a sense of scale for the analysis. The pre-COVID period had slightly more total jobs than post-COVID, reflecting the pandemic's impact on NYC's labor market. However, this citywide view masks important geographic variation explored below.
 
 ```{r}
 sales_summary <- sales_with_cd |>
@@ -801,7 +798,7 @@ sales_summary |>
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
 ```
 
-The sales data showed substantial price appreciation between periods, with median prices rising from $660,000 to $800,000 (over 21% growth). This meant prices increased nearly everywhere, so the key question was whether price growth varied systematically with job accessibility.
+Substantial price appreciation occurred between periods, with median prices rising from $660,000 to $800,000 (over 21% growth). Since prices increased nearly everywhere, the key question becomes whether price growth varied systematically with job accessibility.
 
 ## Neighborhood Demographics (ACS)
 
@@ -831,7 +828,7 @@ acs_borough |>
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
 ```
 
-ACS data provided demographic context for each borough. Manhattan had the highest median income but a smaller population since it functions more as a commercial center. Brooklyn and Queens had the largest populations. These differences helped explain why the job-price relationship might differ across boroughs.
+The ACS data provides demographic context for each borough. Manhattan has the highest median income but a smaller population since it functions more as a commercial center. Brooklyn and Queens have the largest populations. These differences help explain why the job-price relationship might differ across boroughs.
 
 ## Jobs by Borough
 
@@ -857,7 +854,7 @@ jobs_by_borough |>
   row_spec(which(jobs_by_borough$borough == "Manhattan"), bold = TRUE, background = "#fff3cd")
 ```
 
-This table revealed a striking pattern: Manhattan was the only borough that lost jobs (-6.7%), while all outer boroughs gained jobs. Staten Island led with 12.1% growth, followed by Brooklyn at 7.9%. This aligned with the remote work hypothesis since Manhattan has a high concentration of finance and tech jobs that can be done remotely, while outer boroughs have more healthcare, retail, and logistics jobs requiring physical presence.
+A striking pattern emerges: Manhattan was the only borough that lost jobs (-6.7%), while all outer boroughs gained jobs. Staten Island led with 12.1% growth, followed by Brooklyn at 7.9%. This aligns with the remote work hypothesis since Manhattan has a high concentration of finance and tech jobs that can be done remotely, while outer boroughs have more healthcare, retail, and logistics jobs requiring physical presence.
 
 ## Price Distribution by Borough
 
@@ -885,7 +882,7 @@ sales_with_cd |>
   theme(legend.position = "bottom", strip.text = element_text(face = "bold"))
 ```
 
-The density plots showed that prices shifted upward in every borough after COVID. The red distributions (post-COVID) were pushed to the right of the blue ones (pre-COVID) across the board. Even Manhattan, which lost jobs, saw prices increase. This suggested that factors beyond local employment, such as low interest rates or migration patterns, were driving the post-pandemic housing boom.
+Prices shifted upward in every borough after COVID. The red distributions (post-COVID) are pushed to the right of the blue ones (pre-COVID) across the board. Even Manhattan, which lost jobs, saw prices increase, suggesting that factors beyond local employment, such as low interest rates or migration patterns, were driving the post-pandemic housing boom.
 
 # Analysis
 
@@ -998,7 +995,7 @@ tibble(
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
 ```
 
-This was the main test for H1. Both periods showed strong positive correlations (r = 0.630 pre-COVID and r = 0.618 post-COVID), and both were highly significant with p-values well below 0.05. The key finding was that the correlation barely changed, going from 0.630 to 0.618. Neighborhoods with more jobs nearby still commanded higher prices after COVID, just as they did before.
+The correlation analysis serves as the main test for H1. Both periods show strong positive correlations (r = 0.630 pre-COVID and r = 0.618 post-COVID), and both are highly significant with p-values well below 0.05. The key finding is that the correlation barely changed, going from 0.630 to 0.618. Neighborhoods with more jobs nearby still command higher prices after COVID, just as they did before.
 
 ## Fisher's Z-Test
 
@@ -1019,7 +1016,7 @@ tibble(
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
 ```
 
-Fisher's Z-test formally tested whether the small drop in correlation was statistically meaningful. The p-value was 0.92, well above the 0.05 threshold, meaning the null hypothesis (that the two correlations are equal) could not be rejected. The tiny change from r = 0.63 to r = 0.62 was within normal sampling variability. This did not support hypothesis H1.
+To formally test whether the small drop in correlation was statistically meaningful, Fisher's Z-test was applied. The p-value was 0.92, well above the 0.05 threshold, meaning the null hypothesis (that the two correlations are equal) could not be rejected. The tiny change from r = 0.63 to r = 0.62 was within normal sampling variability, which does not support hypothesis H1.
 
 ## Manhattan vs Outer Boroughs
 
@@ -1040,7 +1037,7 @@ tibble(
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
 ```
 
-This table tested H2, which predicted that the job-price relationship would weaken more in Manhattan than the outer boroughs. The results showed the opposite: the correlation actually strengthened in both Manhattan (+0.045) and the outer boroughs (+0.036). Instead of job accessibility becoming less important, it became slightly more important after COVID. This directly contradicted H2. One possible explanation is that as remote work reduced commuting frequency, people valued being near job centers for occasional office days or for the amenities that cluster around employment hubs.
+H2 predicted that the job-price relationship would weaken more in Manhattan than the outer boroughs. The results show the opposite: the correlation actually strengthened in both Manhattan (+0.045) and the outer boroughs (+0.036). Instead of job accessibility becoming less important, it became slightly more important after COVID, directly contradicting H2. One possible explanation is that as remote work reduced commuting frequency, people valued being near job centers for occasional office days or for the amenities that cluster around employment hubs.
 
 ## Difference-in-Differences Regression
 
@@ -1064,7 +1061,7 @@ broom::tidy(model_did) |>
   kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
 ```
 
-The difference-in-differences regression provided another way to test whether the job-price relationship changed. The interaction term "Jobs × Post" was the key coefficient, measuring whether the effect of job accessibility on prices differed between periods. The coefficient was essentially zero (0.028) with a p-value of 0.95, well above 0.05. This meant the null hypothesis (that the relationship did not change) could not be rejected. The "Jobs within 1km" coefficient showed that each additional nearby job was associated with about $1.88 higher property value pre-COVID, and that relationship remained unchanged post-COVID.
+The difference-in-differences regression provides another way to test whether the job-price relationship changed. The interaction term "Jobs × Post" is the key coefficient, measuring whether the effect of job accessibility on prices differed between periods. The coefficient was essentially zero (0.028) with a p-value of 0.95, well above 0.05, meaning the null hypothesis (that the relationship did not change) could not be rejected. The "Jobs within 1km" coefficient shows that each additional nearby job was associated with about $1.88 higher property value pre-COVID, and that relationship remained unchanged post-COVID.
 
 ## Price Growth by Accessibility Level
 
@@ -1092,7 +1089,7 @@ ggplot(access_summary, aes(x = access_label, y = avg_price_change_pct, fill = ac
   ylim(0, max(access_summary$avg_price_change_pct, na.rm = TRUE) * 1.15)
 ```
 
-This was the one hypothesis that received support. Neighborhoods were split into terciles based on pre-COVID job accessibility, then average price growth was compared across groups. Low-accessibility neighborhoods had the highest price growth, followed by medium, then high. This supported H3: even though the overall correlation between job accessibility levels and price levels remained stable, neighborhoods farther from jobs saw larger percentage price increases. Remote work may have made it easier for buyers to consider locations that were previously less desirable due to long commutes.
+H3 was the one hypothesis that received support. Neighborhoods were split into terciles based on pre-COVID job accessibility, then average price growth was compared across groups. Low-accessibility neighborhoods had the highest price growth, followed by medium, then high. Even though the overall correlation between job accessibility levels and price levels remained stable, neighborhoods farther from jobs saw larger percentage price increases. Remote work may have made it easier for buyers to consider locations that were previously less desirable due to long commutes.
 
 # Visualizations
 
@@ -1125,7 +1122,7 @@ leaflet(cd_map) |>
   setView(lng = -73.95, lat = 40.7, zoom = 10)
 ```
 
-This map allowed exploration of how prices changed across different neighborhoods. Toggling between pre and post-COVID shows the shift. Hovering over any district displays the details. Although prices increased nearly everywhere, the relative ranking of neighborhoods remained stable: expensive areas before COVID were still expensive after.
+The interactive map allows exploration of how prices changed across different neighborhoods. Toggling between pre and post-COVID shows the shift, and hovering over any district displays the details. Although prices increased nearly everywhere, the relative ranking of neighborhoods remained stable: expensive areas before COVID were still expensive after.
 
 ## Scatter Plot: Job Accessibility vs Median Price
 
@@ -1146,7 +1143,7 @@ plot_ly() |>
          xaxis = list(title = "Average Jobs within 1km"), yaxis = list(title = "Median Sale Price ($)", tickformat = "$,"))
 ```
 
-This scatter plot displayed both periods side by side. The blue dots (pre-COVID) and red dots (post-COVID) followed similar patterns, with strong positive relationships between jobs and prices in both periods. The red dots were generally shifted upward since prices increased everywhere, but the slope of the relationship appeared unchanged.
+The scatter plot displays both periods side by side. The blue dots (pre-COVID) and red dots (post-COVID) follow similar patterns, with strong positive relationships between jobs and prices in both periods. The red dots are generally shifted upward since prices increased everywhere, but the slope of the relationship appears unchanged.
 
 ## Bivariate Map: Job Change vs Price Change
 
@@ -1170,7 +1167,7 @@ leaflet(cd_map) |>
   setView(lng = -73.95, lat = 40.7, zoom = 10)
 ```
 
-This map categorized neighborhoods by whether jobs and prices both increased, both decreased, or moved in opposite directions. The outer boroughs were predominantly green ("Jobs Up / Price Up"), consistent with the borough-level employment gains shown earlier. Manhattan showed a mix of patterns, with some districts in purple ("Jobs Down / Price Up") where jobs declined but prices still rose. This disconnect between job changes and price changes suggested that factors other than local job accessibility were driving post-COVID price movements.
+The bivariate map categorizes neighborhoods by whether jobs and prices both increased, both decreased, or moved in opposite directions. The outer boroughs are predominantly green ("Jobs Up / Price Up"), consistent with the borough-level employment gains shown earlier. Manhattan shows a mix of patterns, with some districts in purple ("Jobs Down / Price Up") where jobs declined but prices still rose. This disconnect between job changes and price changes suggests that factors other than local job accessibility were driving post-COVID price movements.
 
 ## Job Change vs Price Change
 
@@ -1191,13 +1188,13 @@ ggplot(cd_analysis, aes(x = job_change_pct, y = price_change_pct, color = boroug
   theme_minimal(base_size = 12) + theme(legend.position = "bottom")
 ```
 
-This plot examined whether neighborhoods that gained or lost jobs saw corresponding price changes. The trend line was nearly flat, indicating that changes in job accessibility did not strongly predict price changes. Manhattan neighborhoods (on the left side, since they lost jobs) showed widely varying price outcomes. This reinforced the finding that local job changes were not the main driver of post-COVID price movements.
+The final scatter plot examines whether neighborhoods that gained or lost jobs saw corresponding price changes. The trend line is nearly flat, indicating that changes in job accessibility did not strongly predict price changes. Manhattan neighborhoods (on the left side, since they lost jobs) show widely varying price outcomes, reinforcing the finding that local job changes were not the main driver of post-COVID price movements.
 
 # Conclusion
 
 ## Summary of Findings
 
-This analysis examined whether COVID-19 changed the relationship between job accessibility and property values across NYC's 59 Community Districts. Three hypotheses were tested using LODES employment data, DOF sales data, and Census geography.
+My analysis examined whether COVID-19 changed the relationship between job accessibility and property values across NYC's 59 Community Districts. Three hypotheses were tested using LODES employment data, DOF sales data, and Census geography.
 
 **Finding 1: The job-price correlation stayed stable (H1 not supported).** The correlation went from r = 0.63 before COVID to r = 0.62 after. Fisher's Z-test produced a p-value of 0.92, well above 0.05, so the null hypothesis that the correlations are equal could not be rejected. Neighborhoods near jobs still commanded higher prices after COVID, just as before.
 
@@ -1207,12 +1204,10 @@ This analysis examined whether COVID-19 changed the relationship between job acc
 
 ## Contribution to Overarching Question
 
-This analysis helped answer our team's overarching question about whether COVID-19 reshaped the relationship between neighborhood characteristics and property values. For job accessibility specifically, the answer was nuanced. The basic relationship, where neighborhoods near jobs have higher prices, remained remarkably stable. However, the pattern of price growth did shift toward lower-accessibility areas. COVID-19 may have expanded the set of neighborhoods buyers would consider, even if it did not eliminate the premium for being near jobs.
+My analysis contributes to our team's overarching question about whether COVID-19 reshaped the relationship between neighborhood characteristics and property values. For job accessibility specifically, the answer is nuanced. The basic relationship, where neighborhoods near jobs have higher prices, remained remarkably stable. However, the pattern of price growth did shift toward lower-accessibility areas. COVID-19 may have expanded the set of neighborhoods buyers would consider, even if it did not eliminate the premium for being near jobs.
 
 ## Limitations
 
 Several considerations should be kept in mind when interpreting these results. First, analyzing at the community district level may hide variation within neighborhoods; a property-level analysis could reveal different patterns. Second, 2023 employment had to be estimated using ZIP Code Business Patterns growth rates since actual LODES data was not yet available. Third, the mix of properties that sold may have differed between periods, which could affect price comparisons. Finally, other factors that changed during COVID, such as crime rates, school quality, and transit access, might explain some of the observed patterns.
 
----
 
-*This report used reproducible research practices with all data acquired programmatically via APIs and web scraping.*
