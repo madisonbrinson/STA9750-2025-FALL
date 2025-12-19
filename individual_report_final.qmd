@@ -21,6 +21,7 @@ execute:
 ---
 
 ```{r setup, include=FALSE}
+
 library(sf)
 library(dplyr)
 library(readr)
@@ -1169,7 +1170,7 @@ leaflet(cd_map) |>
   setView(lng = -73.95, lat = 40.7, zoom = 10)
 ```
 
-This map categorized neighborhoods by whether jobs and prices both increased, both decreased, or moved in opposite directions. The purple areas ("Jobs Down / Price Up") represented neighborhoods that lost jobs but still saw prices increase. Much of Manhattan fell into this category. Normally, fewer jobs would be expected to lead to lower prices, but that did not happen here. This suggested that factors other than local job accessibility were driving prices.
+This map categorized neighborhoods by whether jobs and prices both increased, both decreased, or moved in opposite directions. The outer boroughs were predominantly green ("Jobs Up / Price Up"), consistent with the borough-level employment gains shown earlier. Manhattan showed a mix of patterns, with some districts in purple ("Jobs Down / Price Up") where jobs declined but prices still rose. This disconnect between job changes and price changes suggested that factors other than local job accessibility were driving post-COVID price movements.
 
 ## Job Change vs Price Change
 
